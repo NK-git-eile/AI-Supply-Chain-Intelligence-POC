@@ -6,13 +6,23 @@ import pandas as pd
 
 st.set_page_config(page_title="AI Supply Chain Intelligence", page_icon="🔗", layout="wide")
 
-# Sidebar Configuration
 with st.sidebar:
     st.title("⚙️ Configuration")
-    neo4j_uri = st.text_input("Neo4j URI", value=os.getenv("NEO4J_URI", ""), type="password")
+    
+    # Try to get from Streamlit secrets first, fall back to environment variables
+    default_neo4j_uri = st.secrets.get("NEO4J_URI", os.getenv("NEO4J_URI", ""))
+    default_neo4j_password = st.secrets.get("NEO4J_PASSWORD", os.getenv("NEO4J_PASSWORD", ""))
+    default_claude_key = st.secrets.get("CLAUDE_API_KEY", os.getenv("CLAUDE_API_KEY", ""))
+    
+    neo4j_uri = st.text_input("Neo4j URI", value=default_neo4j_uri, type="password")
     neo4j_user = st.text_input("Neo4j User", value="neo4j")
-    neo4j_password = st.text_input("Neo4j Password", type="password", value=os.getenv("NEO4J_PASSWORD", ""))
-    claude_key = st.text_input("Claude API Key", type="password", value=os.getenv("CLAUDE_API_KEY", ""))
+    neo4j_password = st.text_input("Neo4j Password", type="password", value=default_neo4j_password)
+    claude_key = st.text_input("Claude API Key", type="password", value=default_claude_key)
+    
+    if all([default_neo4j_uri, default_neo4j_password, default_claude_key]):
+        st.success("✓ Credentials loaded from secrets")
+    else:
+        st.warning("⚠️ Configure credentials below")
     
     st.markdown("---")
     st.markdown("### 📊 Quick Stats")
