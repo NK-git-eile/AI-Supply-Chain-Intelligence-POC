@@ -38,7 +38,30 @@ with st.sidebar:
                 st.error(f"Error: {e}")
 
 st.title("🔗 AI Supply Chain Intelligence")
-st.markdown("### Ask Questions About Your Production Plan")
+st.markdown("### Real-Time Production Plan Analysis")
+
+# Data context banner
+st.info("""
+📊 **Current Data Snapshot**
+
+**Source:** Blue Yonder Manufacturing QA Environment (Manu QA 27-Feb-2026)
+
+**Included Elements:**
+- ✓ Scheduled Receipts (production work orders)
+- ✓ Customer Orders (demand)
+- ✓ Pegging relationships (which work orders fulfill which customer orders)
+- ✓ Berlin production site data
+
+**Enrichments Added:**
+- 🏭 Production line changeover times (estimated based on manufacturing data)
+- 🎯 Must-win customer flags (7 strategic customers identified)
+- 📊 Customer OTIF performance scores (mock data for demonstration)
+- 📅 Contract renewal timelines (mock data for demonstration)
+
+**Proof of Concept:** This demonstrates AI-enabled operational intelligence on real Blue Yonder data.
+""")
+
+st.markdown("---")
 
 # Main interface - just the query tab
 st.header("💬 Interactive Query Interface")
