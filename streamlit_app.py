@@ -25,20 +25,10 @@ st.markdown("""
         border-left: 4px solid #3b82f6;
         box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
-    .action-high {
-        background: #fee2e2;
-        border-left: 4px solid #dc2626;
-        padding: 1rem;
-        border-radius: 8px;
-        margin-bottom: 1rem;
-    }
-    .status-good { color: #10b981; font-weight: bold; }
-    .status-warning { color: #f59e0b; font-weight: bold; }
-    .status-critical { color: #dc2626; font-weight: bold; }
 </style>
 """, unsafe_allow_html=True)
 
-# Sidebar (simplified)
+# Sidebar
 with st.sidebar:
     st.title("⚙️ Configuration")
     neo4j_uri = st.text_input("Neo4j URI", value=st.secrets.get("NEO4J_URI", ""), type="password")
@@ -101,11 +91,11 @@ if all([neo4j_uri, neo4j_password]):
                        sum(sr.quantity) AS units
             """).single()
             
-           # Work orders scheduled
-work_orders = session.run("""
-    MATCH (sr:ScheduledReceipt)-[:FOR_ITEM]->(i:Item {item_type: 'FP'})
-    RETURN count(sr) AS total
-""").single()
+            # Work orders scheduled
+            work_orders = session.run("""
+                MATCH (sr:ScheduledReceipt)-[:FOR_ITEM]->(i:Item {item_type: 'FP'})
+                RETURN count(sr) AS total
+            """).single()
             
             # Products scheduled
             products = session.run("""
@@ -123,7 +113,7 @@ work_orders = session.run("""
         
         driver.close()
         
-        # Display KPIs in grid
+        # Display KPIs in grid - Row 1
         col1, col2, col3, col4 = st.columns(4)
         
         with col1:
@@ -154,14 +144,14 @@ work_orders = session.run("""
             )
         
         with col4:
-    total_orders = work_orders['total'] if work_orders and work_orders['total'] else 0
-    st.metric(
-        "Work Orders",
-        f"{total_orders:,}",
-        delta="Scheduled"
-    )
+            total_orders = work_orders['total'] if work_orders and work_orders['total'] else 0
+            st.metric(
+                "Work Orders",
+                f"{total_orders:,}",
+                delta="Scheduled"
+            )
         
-        # Second row
+        # Row 2
         col5, col6, col7, col8 = st.columns(4)
         
         with col5:
@@ -181,18 +171,22 @@ work_orders = session.run("""
             )
         
         with col7:
-            avg_margin = (hm_margin / (high_margin['units'] * 10) * 100) if high_margin and high_margin['units'] else 0
+            # Calculate average margin from high-margin data
+            if high_margin and high_margin['margin'] and high_margin['units']:
+                avg_margin = (high_margin['margin'] / (high_margin['units'] * 10)) * 100
+            else:
+                avg_margin = 0
             st.metric(
                 "Avg Margin",
-                f"{avg_margin:.1f}%" if avg_margin > 0 else "0%",
-                delta="High-margin products"
+                f"{avg_margin:.1f}%" if avg_margin > 0 else "Mock",
+                delta="Estimated"
             )
         
         with col8:
             st.metric(
                 "Data Status",
                 "✓ Live",
-                delta="Mock financials"
+                delta="Mock $ data"
             )
         
         st.markdown("---")
@@ -200,8 +194,10 @@ work_orders = session.run("""
     except Exception as e:
         st.error(f"Error loading KPIs: {e}")
         st.info("Configure credentials in sidebar to view dashboard")
+else:
+    st.warning("⚠️ Configure Neo4j and Claude credentials in sidebar to view dashboard")
 
-# Query Interface (your existing code)
+# Query Interface
 st.header("💬 Interactive Query Interface")
 
 st.markdown("""
