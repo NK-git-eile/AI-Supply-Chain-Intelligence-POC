@@ -101,12 +101,10 @@ if all([neo4j_uri, neo4j_password]):
                        sum(sr.quantity) AS units
             """).single()
             
-           # Active lines (Finished Goods only, simplified names)
-lines = session.run("""
+           # Work orders scheduled
+work_orders = session.run("""
     MATCH (sr:ScheduledReceipt)-[:FOR_ITEM]->(i:Item {item_type: 'FP'})
-    WITH sr.line AS full_name
-    WITH split(full_name, '_')[0] AS line_base
-    RETURN count(DISTINCT line_base) AS total
+    RETURN count(sr) AS total
 """).single()
             
             # Products scheduled
@@ -156,12 +154,12 @@ lines = session.run("""
             )
         
         with col4:
-            total_lines = lines['total'] if lines and lines['total'] else 0
-            st.metric(
-                "Production Lines",
-                f"{total_lines}",
-                delta="Active"
-            )
+    total_orders = work_orders['total'] if work_orders and work_orders['total'] else 0
+    st.metric(
+        "Work Orders",
+        f"{total_orders:,}",
+        delta="Scheduled"
+    )
         
         # Second row
         col5, col6, col7, col8 = st.columns(4)
