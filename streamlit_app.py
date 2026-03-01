@@ -101,11 +101,13 @@ if all([neo4j_uri, neo4j_password]):
                        sum(sr.quantity) AS units
             """).single()
             
-            # Active lines
-            lines = session.run("""
-                MATCH (sr:ScheduledReceipt)
-                RETURN count(DISTINCT sr.line) AS total
-            """).single()
+           # Active lines (Finished Goods only, simplified names)
+lines = session.run("""
+    MATCH (sr:ScheduledReceipt)-[:FOR_ITEM]->(i:Item {item_type: 'FP'})
+    WITH sr.line AS full_name
+    WITH split(full_name, '_')[0] AS line_base
+    RETURN count(DISTINCT line_base) AS total
+""").single()
             
             # Products scheduled
             products = session.run("""
