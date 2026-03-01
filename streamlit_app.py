@@ -3,165 +3,205 @@ from neo4j import GraphDatabase
 import anthropic
 import os
 import pandas as pd
+from datetime import datetime, timedelta
 
-st.set_page_config(page_title="AI Supply Chain Intelligence", page_icon="🔗", layout="wide")
+st.set_page_config(page_title="Production Control Tower", page_icon="🔗", layout="wide")
 
+# Custom CSS
+st.markdown("""
+<style>
+    .main-header {
+        background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+        padding: 2rem;
+        border-radius: 10px;
+        color: white;
+        margin-bottom: 2rem;
+        text-align: center;
+    }
+    .metric-card {
+        background: white;
+        padding: 1rem;
+        border-radius: 8px;
+        border-left: 4px solid #3b82f6;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .action-high {
+        background: #fee2e2;
+        border-left: 4px solid #dc2626;
+        padding: 1rem;
+        border-radius: 8px;
+        margin-bottom: 1rem;
+    }
+    .status-good { color: #10b981; font-weight: bold; }
+    .status-warning { color: #f59e0b; font-weight: bold; }
+    .status-critical { color: #dc2626; font-weight: bold; }
+</style>
+""", unsafe_allow_html=True)
+
+# Sidebar (simplified)
 with st.sidebar:
     st.title("⚙️ Configuration")
-    
-    # Try to get from Streamlit secrets first, fall back to environment variables
-    default_neo4j_uri = st.secrets.get("NEO4J_URI", os.getenv("NEO4J_URI", ""))
-    default_neo4j_password = st.secrets.get("NEO4J_PASSWORD", os.getenv("NEO4J_PASSWORD", ""))
-    default_claude_key = st.secrets.get("CLAUDE_API_KEY", os.getenv("CLAUDE_API_KEY", ""))
-    
-    neo4j_uri = st.text_input("Neo4j URI", value=default_neo4j_uri, type="password")
-    neo4j_user = st.text_input("Neo4j User", value="neo4j")
-    neo4j_password = st.text_input("Neo4j Password", type="password", value=default_neo4j_password)
-    claude_key = st.text_input("Claude API Key", type="password", value=default_claude_key)
-    
-    if all([default_neo4j_uri, default_neo4j_password, default_claude_key]):
-        st.success("✓ Credentials loaded from secrets")
-    else:
-        st.warning("⚠️ Configure credentials below")
-    
-    st.markdown("---")
-    st.markdown("### 📊 Quick Stats")
-    
-    if st.button("Load Stats"):
-        if all([neo4j_uri, neo4j_password]):
-            try:
-                driver = GraphDatabase.driver(neo4j_uri, auth=(neo4j_user, neo4j_password))
-                
-                with driver.session() as session:
-                    sr_count = session.run("MATCH (sr:ScheduledReceipt) RETURN count(sr) AS c").single()['c']
-                    co_count = session.run("MATCH (co:CustomerOrder) RETURN count(co) AS c").single()['c']
-                    cust_count = session.run("MATCH (c:Customer) RETURN count(c) AS c").single()['c']
-                    must_win_count = session.run("MATCH (c:Customer {must_win: true}) RETURN count(c) AS c").single()['c']
-                
-                driver.close()
-                
-                st.metric("Scheduled Receipts", f"{sr_count:,}")
-                st.metric("Customer Orders", f"{co_count:,}")
-                st.metric("Total Customers", cust_count)
-                st.metric("Must-Win Customers", must_win_count)
-                
-            except Exception as e:
-                st.error(f"Error: {e}")
+    neo4j_uri = st.text_input("Neo4j URI", value=st.secrets.get("NEO4J_URI", ""), type="password")
+    neo4j_user = "neo4j"
+    neo4j_password = st.text_input("Neo4j Password", type="password", value=st.secrets.get("NEO4J_PASSWORD", ""))
+    claude_key = st.text_input("Claude API Key", type="password", value=st.secrets.get("CLAUDE_API_KEY", ""))
 
-# Main Title
-st.title("🔗 AI Supply Chain Intelligence")
-st.markdown("### Real-Time Production Plan Analysis")
+# Hero Header
+current_time = datetime.now()
+st.markdown(f"""
+<div class="main-header">
+    <h1>🔗 PRODUCTION CONTROL TOWER</h1>
+    <h3>Berlin Manufacturing Site</h3>
+    <p style="font-size: 1.1rem; margin-top: 0.5rem;">
+        {current_time.strftime('%A, %B %d, %Y')} | {current_time.strftime('%H:%M')} CET
+    </p>
+</div>
+""", unsafe_allow_html=True)
 
-# Data Context Banner
-st.info("""
-📊 **Current Data Snapshot**
+# Refresh button
+col1, col2 = st.columns([1, 5])
+with col1:
+    refresh = st.button("🔄 Refresh Data", use_container_width=True)
 
-**Source:** Blue Yonder Manufacturing QA Environment (Manu QA 27-Feb-2026)
-
-**Included Elements:**
-- ✓ Scheduled Receipts (2,000+ production work orders)
-- ✓ Customer Orders (30,000+ demand orders)
-- ✓ Pegging Relationships (showing which production fulfills which customer demand)
-- ✓ Berlin Production Site (18 production lines)
-- ✓ Customer Master Data (unique customers with order history)
-
-**Enrichments Added for Demo:**
-- 🏭 **Production Line Changeover Times:** Estimated based on line complexity (1-6 hours)
-- 🎯 **Must-Win Customer Flags:** 7 strategic customers identified (151301, 181118, 11176644, 11202564, 11231001, 11500090, 11500660)
-- 📊 **OTIF Performance Scores:** Mock data (88%-98% range) for demonstration
-- 📅 **Contract Renewal Timelines:** Mock data (45-180 days) for demonstration
-
-**What This Demonstrates:** AI-enabled operational intelligence built on real Blue Yonder production data, showing how graph database + AI can deliver real-time decision support that traditional planning systems cannot provide.
-
-**Built in:** 2 days | **Cost:** $50 | **Alternative:** BCG $27M proposal
-""")
-
-# Data Dictionary
-with st.expander("📖 Data Dictionary - Click to View Full Schema"):
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown("#### 🗄️ **Node Types**")
+# Financial KPIs Section
+if all([neo4j_uri, neo4j_password]):
+    try:
+        driver = GraphDatabase.driver(neo4j_uri, auth=(neo4j_user, neo4j_password))
         
-        st.markdown("**ScheduledReceipt** (Production Work Orders)")
-        st.markdown("""
-        - `item` - Product code/SKU
-        - `site` - Manufacturing site (e.g., BERLINPL)
-        - `line` - Production line name
-        - `quantity` - Units to produce
-        - `sched_date` - Scheduled completion date
-        - `start_date` - Production start date
-        - `item_type` - Product type classification
-        """)
+        st.header("📊 PRODUCTION INTELLIGENCE - NEXT 7 DAYS")
+        week_start = current_time.strftime('%Y-%m-%d')
+        week_end = (current_time + timedelta(days=7)).strftime('%Y-%m-%d')
+        st.markdown(f"**Planning Horizon:** {current_time.strftime('%B %d')} - {(current_time + timedelta(days=7)).strftime('%B %d, %Y')}")
         
-        st.markdown("**CustomerOrder** (Demand)")
-        st.markdown("""
-        - `order_id` - Unique order identifier
-        - `item` - Product code/SKU
-        - `site` - Destination site
-        - `customer_number` - Customer ID
-        - `country` - Customer country
-        - `ship_date` - Requested ship date
-        - `quantity` - Order quantity
-        - `priority` - Order priority sequence
-        """)
-    
-    with col2:
-        st.markdown("#### 🔗 **Relationships**")
+        with driver.session() as session:
+            # Calculate KPIs
+            
+            # Shipping this week (Finished Goods only)
+            shipping = session.run("""
+                MATCH (sr:ScheduledReceipt)-[:FOR_ITEM]->(i:Item {item_type: 'FP'})
+                WHERE sr.sched_date >= $start AND sr.sched_date <= $end
+                RETURN sum(sr.quantity * i.asp) AS revenue,
+                       count(DISTINCT sr) AS orders
+            """, start=week_start, end=week_end).single()
+            
+            # Must-win exposure
+            must_win = session.run("""
+                MATCH (sr:ScheduledReceipt)-[:FULFILLS]->(co)-[:FOR_CUSTOMER]->(c:Customer {must_win: true})
+                MATCH (sr)-[:FOR_ITEM]->(i:Item {item_type: 'FP'})
+                WHERE sr.sched_date >= $start AND sr.sched_date <= $end
+                RETURN sum(sr.quantity * i.asp) AS value,
+                       count(DISTINCT c) AS customers
+            """, start=week_start, end=week_end).single()
+            
+            # High-margin products
+            high_margin = session.run("""
+                MATCH (sr:ScheduledReceipt)-[:FOR_ITEM]->(i:Item {item_type: 'FP'})
+                WHERE i.margin_pct > 0.40
+                RETURN sum(sr.quantity * i.margin) AS margin,
+                       sum(sr.quantity) AS units
+            """).single()
+            
+            # Active lines
+            lines = session.run("""
+                MATCH (sr:ScheduledReceipt)
+                RETURN count(DISTINCT sr.line) AS total
+            """).single()
+            
+            # Products scheduled
+            products = session.run("""
+                MATCH (sr:ScheduledReceipt)-[:FOR_ITEM]->(i:Item {item_type: 'FP'})
+                WHERE sr.sched_date >= $start AND sr.sched_date <= $end
+                RETURN count(DISTINCT i) AS count
+            """, start=week_start, end=week_end).single()
+            
+            # Total volume
+            volume = session.run("""
+                MATCH (sr:ScheduledReceipt)-[:FOR_ITEM]->(i:Item {item_type: 'FP'})
+                WHERE sr.sched_date >= $start AND sr.sched_date <= $end
+                RETURN sum(sr.quantity) AS total
+            """, start=week_start, end=week_end).single()
         
-        st.markdown("**ScheduledReceipt → FULFILLS → CustomerOrder**")
-        st.markdown("Shows which production work orders fulfill which customer orders (pegging)")
+        driver.close()
         
-        st.markdown("**CustomerOrder → FOR_CUSTOMER → Customer**")
-        st.markdown("Links orders to customer master data")
+        # Display KPIs in grid
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            revenue = shipping['revenue'] if shipping and shipping['revenue'] else 0
+            orders = shipping['orders'] if shipping and shipping['orders'] else 0
+            st.metric(
+                "Shipping This Week",
+                f"${revenue/1e6:.1f}M" if revenue > 0 else "$0",
+                delta=f"{orders} orders"
+            )
+        
+        with col2:
+            mw_value = must_win['value'] if must_win and must_win['value'] else 0
+            mw_custs = must_win['customers'] if must_win and must_win['customers'] else 0
+            st.metric(
+                "Must-Win Exposure",
+                f"${mw_value/1e6:.1f}M" if mw_value > 0 else "$0",
+                delta=f"{mw_custs} customers",
+                delta_color="inverse"
+            )
+        
+        with col3:
+            hm_margin = high_margin['margin'] if high_margin and high_margin['margin'] else 0
+            st.metric(
+                "High-Margin Products",
+                f"${hm_margin/1e6:.1f}M" if hm_margin > 0 else "$0",
+                delta=">40% margin"
+            )
+        
+        with col4:
+            total_lines = lines['total'] if lines and lines['total'] else 0
+            st.metric(
+                "Production Lines",
+                f"{total_lines}",
+                delta="Active"
+            )
+        
+        # Second row
+        col5, col6, col7, col8 = st.columns(4)
+        
+        with col5:
+            prod_count = products['count'] if products and products['count'] else 0
+            st.metric(
+                "Products Scheduled",
+                f"{prod_count}",
+                delta="Unique SKUs"
+            )
+        
+        with col6:
+            vol = volume['total'] if volume and volume['total'] else 0
+            st.metric(
+                "Order Volume",
+                f"{vol:,.0f}" if vol > 0 else "0",
+                delta="units/week"
+            )
+        
+        with col7:
+            avg_margin = (hm_margin / (high_margin['units'] * 10) * 100) if high_margin and high_margin['units'] else 0
+            st.metric(
+                "Avg Margin",
+                f"{avg_margin:.1f}%" if avg_margin > 0 else "0%",
+                delta="High-margin products"
+            )
+        
+        with col8:
+            st.metric(
+                "Data Status",
+                "✓ Live",
+                delta="Mock financials"
+            )
         
         st.markdown("---")
         
-        st.markdown("**Customer** (Customer Master)")
-        st.markdown("""
-        - `customer_number` - Unique customer ID
-        - `country` - Customer location
-        - `must_win` - Strategic customer flag (boolean)
-        - `otif_current` - On-Time-In-Full score (0.0-1.0)
-        - `contract_renewal_days` - Days until contract renewal
-        - `total_volume` - Total order volume
-        """)
-        
-        st.markdown("**ProductionLine** (Manufacturing Resources)")
-        st.markdown("""
-        - `name` - Production line identifier
-        - `changeover_hours` - Changeover time (hours)
-        - `status` - Current status (Available/Down)
-        """)
-    
-    st.markdown("---")
-    st.markdown("#### 🔍 **Sample Queries**")
-    
-    st.code("""
-# Find what's scheduled on a specific line
-MATCH (sr:ScheduledReceipt {line: 'LINE_NAME'})
-RETURN sr.item, sr.quantity, sr.sched_date
+    except Exception as e:
+        st.error(f"Error loading KPIs: {e}")
+        st.info("Configure credentials in sidebar to view dashboard")
 
-# Find customer impact of line downtime
-MATCH (sr:ScheduledReceipt {line: 'LINE_NAME'})
-      -[:FULFILLS]->(co)-[:FOR_CUSTOMER]->(c)
-RETURN c.customer_number, c.must_win, c.otif_current
-
-# Find all must-win customers
-MATCH (c:Customer {must_win: true})
-RETURN c.customer_number, c.country, c.otif_current
-ORDER BY c.otif_current
-
-# Find high-volume products
-MATCH (sr:ScheduledReceipt)
-RETURN sr.item, sum(sr.quantity) AS total_qty
-ORDER BY total_qty DESC
-LIMIT 10
-    """, language="cypher")
-
-st.markdown("---")
-
-# Main Query Interface
+# Query Interface (your existing code)
 st.header("💬 Interactive Query Interface")
 
 st.markdown("""
@@ -171,40 +211,32 @@ Ask questions in plain English about your supply chain data. The AI will:
 3. Display the results
 """)
 
-# Sample Questions
+# Sample questions
 with st.expander("📋 Sample Questions You Can Ask"):
     st.markdown("""
+    **Financial Analysis:**
+    - What's the total margin for products shipping this week?
+    - Show me high-margin products (>40%) scheduled this month
+    - Which products have the highest revenue?
+    
     **Production & Capacity:**
     - Show me all production lines
     - Which lines have the most scheduled work?
-    - What's scheduled on line [LINE_NAME]?
-    - How much total production is scheduled this month?
+    - What's scheduled on finished goods lines?
     
     **Customer Analysis:**
     - Show me all must-win customers
     - Which customers have the most orders?
-    - List customers in Germany
-    - Show me customers with OTIF below 90%
-    
-    **Order Analysis:**
-    - What orders are shipping next week?
-    - Show me orders for customer [CUSTOMER_NUMBER]
-    - Which products have the highest volumes?
-    - What's the total order volume?
+    - Show me customers with orders this week
     
     **Risk Analysis:**
-    - Which customers are affected if line [LINE_NAME] goes down?
-    - Show me must-win customers at risk (low OTIF, upcoming renewal)
-    - What's the impact of losing line [LINE_NAME]?
-    
-    **General Queries:**
-    - Show me a sample of the data
-    - What's in the database?
-    - Give me an overview of scheduled production
+    - What finished goods ship in next 48 hours?
+    - Show me must-win customer orders
+    - Which high-margin products are scheduled?
     """)
 
-# Question Input
-question = st.text_area("Your question:", height=100, placeholder="e.g., Show me all must-win customers with their OTIF scores")
+# Question input
+question = st.text_area("Your question:", height=100, placeholder="e.g., Show me high-margin products shipping this week")
 
 col1, col2 = st.columns([1, 4])
 
@@ -230,22 +262,20 @@ if ask_button:
 DATABASE SCHEMA:
 
 Nodes:
-- ScheduledReceipt: item (product code), site (location), line (production line), quantity, sched_date, start_date
-- CustomerOrder: order_id, item, site, customer_number, country, ship_date, quantity, priority
-- Customer: customer_number, country, must_win (boolean), otif_current (0.0-1.0), contract_renewal_days, total_volume
-- ProductionLine: name, changeover_hours, status
+- ScheduledReceipt: item, site, line, quantity, sched_date, start_date
+- CustomerOrder: order_id, item, site, customer_number, country, ship_date, quantity
+- Customer: customer_number, country, must_win (boolean)
+- Item: code, description, item_type ('FP' or 'SFP'), family, asp, cogs, margin, margin_pct, strategic_importance, abc_class
 
 Relationships:
 - (ScheduledReceipt)-[:FULFILLS]->(CustomerOrder)-[:FOR_CUSTOMER]->(Customer)
+- (ScheduledReceipt)-[:FOR_ITEM]->(Item)
 
-IMPORTANT RULES:
-1. Return ONLY the Cypher query, no explanation
-2. Use DISTINCT when appropriate to avoid duplicates
-3. Limit results to 100 unless asked for more
-4. For dates, they are strings in format 'YYYY-MM-DD' or 'MM/DD/YYYY'
-5. Product codes and line names are case-sensitive
-6. Common line name pattern: product_code + BERLINPL + numbers + process
-7. Use CONTAINS for partial text matching when searching line names or products
+IMPORTANT:
+1. Return ONLY the Cypher query
+2. For financial data, use Item node properties (asp, margin, margin_pct)
+3. Filter to item_type: 'FP' for finished goods with financial data
+4. Limit to 100 results unless asked for more
 
 QUESTION: {question}
 
@@ -260,7 +290,7 @@ Return ONLY the Cypher query:
                 
                 query = response.content[0].text.strip()
                 
-                # Clean up markdown formatting
+                # Clean up markdown
                 if '```' in query:
                     query = query.split('```')[1]
                     if query.startswith('cypher'):
@@ -271,7 +301,7 @@ Return ONLY the Cypher query:
                     st.subheader("Generated Query")
                     st.code(query, language="cypher")
                 
-                # Execute query
+                # Execute
                 st.subheader("Results")
                 
                 driver = GraphDatabase.driver(neo4j_uri, auth=(neo4j_user, neo4j_password))
@@ -283,81 +313,22 @@ Return ONLY the Cypher query:
                 driver.close()
                 
                 if len(data) == 0:
-                    st.info("No results found for this query")
-                    st.markdown("**Try:**")
-                    st.markdown("- Asking a broader question")
-                    st.markdown("- Checking sample questions above")
-                    st.markdown("- Asking 'show me a sample of the data' first")
+                    st.info("No results found")
                 else:
                     st.success(f"✓ Found {len(data)} results")
-                    
-                    # Display as dataframe
                     df = pd.DataFrame(data)
                     st.dataframe(df, use_container_width=True)
                     
-                    # Download option
                     csv = df.to_csv(index=False)
                     st.download_button(
-                        label="📥 Download as CSV",
+                        "📥 Download CSV",
                         data=csv,
-                        file_name="query_results.csv",
+                        file_name="results.csv",
                         mime="text/csv"
                     )
             
             except Exception as e:
                 st.error(f"❌ Error: {str(e)}")
-                
-                # Try to fix common issues
-                if "syntax" in str(e).lower() or "invalid" in str(e).lower():
-                    st.warning("The generated query had a syntax error. Trying to fix...")
-                    
-                    fix_prompt = f"""The query failed with error: {e}
 
-Original query:
-{query}
-
-Fix the query and return ONLY the corrected Cypher query:
-"""
-                    
-                    try:
-                        fix_response = client.messages.create(
-                            model="claude-sonnet-4-20250514",
-                            max_tokens=800,
-                            messages=[{"role": "user", "content": fix_prompt}]
-                        )
-                        
-                        fixed_query = fix_response.content[0].text.strip()
-                        if '```' in fixed_query:
-                            fixed_query = fixed_query.split('```')[1]
-                            if fixed_query.startswith('cypher'):
-                                fixed_query = fixed_query[6:]
-                            fixed_query = fixed_query.strip()
-                        
-                        st.code(fixed_query, language="cypher")
-                        st.info("Trying fixed query...")
-                        
-                        driver = GraphDatabase.driver(neo4j_uri, auth=(neo4j_user, neo4j_password))
-                        with driver.session() as session:
-                            result = session.run(fixed_query)
-                            data = [dict(r) for r in result]
-                        driver.close()
-                        
-                        if len(data) > 0:
-                            st.success(f"✓ Fixed! Found {len(data)} results")
-                            df = pd.DataFrame(data)
-                            st.dataframe(df, use_container_width=True)
-                            
-                            csv = df.to_csv(index=False)
-                            st.download_button(
-                                label="📥 Download as CSV",
-                                data=csv,
-                                file_name="query_results.csv",
-                                mime="text/csv"
-                            )
-                    
-                    except Exception as e2:
-                        st.error(f"Still failed: {e2}")
-
-# Footer
 st.markdown("---")
-st.markdown("**💰 Built in 2 days for $50** | **🎯 Real Blue Yonder data** | **🤖 Powered by Neo4j + Claude AI**")
+st.markdown("**Production Control Tower - Berlin Pilot** | Built in 2 days | Real Blue Yonder data + Mock financials")
