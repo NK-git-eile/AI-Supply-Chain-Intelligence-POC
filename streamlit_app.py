@@ -114,41 +114,188 @@ if line_data:
     st.info(f"🔍 Searching for: `{selected_line}` (length: {len(selected_line)})")
     
     if st.button("🔧 Simulate Downtime", type="primary"):
+        
+        # Downtime duration
+        downtime_days = 3
+        downtime_end = (current_time + timedelta(days=downtime_days)).strftime('%Y-%m-%d')
+        
+        st.warning(f"⏱️ Simulating {downtime_days}-day downtime (line returns: {downtime_end})")
+        
         with driver.session() as session:
-            # First check if line exists
+            # Check if line exists
             check = session.run("""
                 MATCH (r:Resource {line_name: $line})
                 RETURN r.line_name AS found
             """, line=selected_line).single()
             
             if not check:
-                st.error(f"❌ Line '{selected_line}' not found in Resources!")
-                st.write("Available lines:")
-                all_lines = session.run("MATCH (r:Resource) RETURN r.line_name AS line ORDER BY line")
-                for row in all_lines:
-                    st.write(f"  - `{row['line']}`")
+                st.error(f"❌ Line '{selected_line}' not found!")
             else:
-                st.success(f"✓ Found line: {check['found']}")
-                
-                result = session.run("""
+                # Total impact (all work orders)
+                total_result = session.run("""
                     MATCH (sr:ScheduledReceipt)-[:ON_RESOURCE]->(r:Resource {line_name: $line})
                     MATCH (sr)-[:FOR_ITEM]->(i:Item {item_type: 'FP'})
-                    RETURN count(sr) AS work_orders,
-                           count(DISTINCT i) AS products,
-                           sum(sr.quantity * i.asp) AS revenue,
-                           sum(sr.quantity * i.margin) AS margin
+                    RETURN count(sr) AS total_orders,
+                           sum(sr.quantity * i.asp) AS total_revenue,
+                           sum(sr.quantity * i.margin) AS total_margin
                 """, line=selected_line).single()
                 
-                if result and result['work_orders'] > 0:
-                    st.subheader(f"Impact: {selected_line}")
+                # CRITICAL: Orders shipping within downtime period
+                critical_result = session.run("""
+                    MATCH (sr:ScheduledReceipt)-[:ON_RESOURCE]->(r:Resource {line_name: $line})
+                    MATCH (sr)-[:FOR_ITEM]->(i:Item {item_type: 'FP'})
+                    MATCH (sr)-[:FULFILLS]->(co:CustomerOrder)
+                    WHERE co.ship_date <= $downtime_end
+                    RETURN count(sr) AS critical_orders,
+                           sum(sr.quantity * i.asp) AS critical_revenue,
+                           sum(sr.quantity * i.margin) AS critical_margin,
+                           count(DISTINCT co.customer_number) AS critical_customers
+                """, line=selected_line, downtime_end=downtime_end).single()
+                
+                # CAN WAIT: Orders shipping after downtime
+                can_wait_result = session.run("""
+                    MATCH (sr:ScheduledReceipt)-[:ON_RESOURCE]->(r:Resource {line_name: $line})
+                    MATCH (sr)-[:FOR_ITEM]->(i:Item {item_type: 'FP'})
+                    MATCH (sr)-[:FULFILLS]->(co:CustomerOrder)
+                    WHERE co.ship_date > $downtime_end
+                    RETURN count(sr) AS safe_orders,
+                           sum(sr.quantity * i.asp) AS safe_revenue
+                """, line=selected_line, downtime_end=downtime_end).single()
+                
+                if total_result and total_result['total_orders'] > 0:
+                    st.subheader(f"📊 {downtime_days}-Day Downtime Impact: {selected_line}")
                     
-                    c1, c2, c3, c4 = st.columns(4)
-                    c1.metric("Work Orders", result['work_orders'])
-                    c2.metric("Products", result['products'])
-                    c3.metric("Revenue at Risk", f"${result['revenue']/1e6:.1f}M")
-                    c4.metric("Margin at Risk", f"${result['margin']/1e6:.1f}M")
+                    # Total Impact
+                    st.markdown("### 🔴 TOTAL IMPACT")
+                    c1, c2, c3 = st.columns(3)
+                    c1.metric("Work Orders Affected", f"{total_result['total_orders']}")
+                    c2.metric("Revenue at Risk", f"${total_result['total_revenue']/1e6:.1f}M")
+                    c3.metric("Margin at Risk", f"${total_result['total_margin']/1e6:.1f}M")
+                    
+                    st.markdown("---")
+                    
+                    # Critical vs Can Wait
+                    st.markdown("### ⏰ TIME-SENSITIVE ANALYSIS")
+                    
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        st.markdown("#### 🚨 CRITICAL (Ship in 3 days)")
+                        critical_orders = critical_result['critical_orders'] if critical_result else 0
+                        critical_revenue = critical_result['critical_revenue'] if critical_result else 0
+                        critical_margin = critical_result['critical_margin'] if critical_result else 0
+                        critical_custs = critical_result['critical_customers'] if critical_result else 0
+                        
+                        st.metric("Orders", f"{critical_orders}", delta="Must expedite", delta_color="inverse")
+                        st.metric("Revenue", f"${critical_revenue/1e6:.1f}M")
+                        st.metric("Margin", f"${critical_margin/1e6:.1f}M")
+                        st.metric("Customers", f"{critical_custs}")
+                        
+                        if critical_orders > 0:
+                            st.error("⚠️ These orders CANNOT wait - immediate action required")
+                    
+                    with col2:
+                        st.markdown("#### ✅ CAN WAIT (Ship after 3 days)")
+                        safe_orders = can_wait_result['safe_orders'] if can_wait_result else 0
+                        safe_revenue = can_wait_result['safe_revenue'] if can_wait_result else 0
+                        
+                        st.metric("Orders", f"{safe_orders}", delta="Can delay", delta_color="normal")
+                        st.metric("Revenue", f"${safe_revenue/1e6:.1f}M")
+                        
+                        if safe_orders > 0:
+                            st.success("✓ These orders can be rescheduled after line restart")
+                    
+                    st.markdown("---")
+                    
+                    # Must-Win Analysis
+                    st.markdown("### 🎯 MUST-WIN CUSTOMER ANALYSIS")
+                    
+                    mw_critical = session.run("""
+                        MATCH (sr:ScheduledReceipt)-[:ON_RESOURCE]->(r:Resource {line_name: $line})
+                        MATCH (sr)-[:FOR_ITEM]->(i:Item {item_type: 'FP'})
+                        MATCH (sr)-[:FULFILLS]->(co:CustomerOrder)-[:FOR_CUSTOMER]->(c:Customer {must_win: true})
+                        WHERE co.ship_date <= $downtime_end
+                        RETURN count(DISTINCT c) AS mw_customers,
+                               count(sr) AS mw_orders,
+                               sum(sr.quantity * i.margin) AS mw_margin
+                    """, line=selected_line, downtime_end=downtime_end).single()
+                    
+                    if mw_critical and mw_critical['mw_customers'] > 0:
+                        st.error(f"🔴 **{mw_critical['mw_customers']} MUST-WIN customers** shipping in 3 days!")
+                        st.write(f"   Orders: {mw_critical['mw_orders']} | Margin: ${mw_critical['mw_margin']/1e3:.0f}K")
+                        st.write("   **ACTION:** Expedite or move to alternative line immediately")
+                    else:
+                        st.success("✓ No must-win customers shipping in critical period")
+                    
+                    st.markdown("---")
+                    
+                    # High-Margin Products in Critical Period
+                    st.markdown("### 💎 HIGH-MARGIN PRODUCTS (Shipping in 3 days)")
+                    
+                    hm_critical = session.run("""
+                        MATCH (sr:ScheduledReceipt)-[:ON_RESOURCE]->(r:Resource {line_name: $line})
+                        MATCH (sr)-[:FOR_ITEM]->(i:Item {item_type: 'FP'})
+                        MATCH (sr)-[:FULFILLS]->(co:CustomerOrder)
+                        WHERE i.margin_pct > 0.40 AND co.ship_date <= $downtime_end
+                        RETURN i.code AS product,
+                               i.description AS name,
+                               i.margin_pct AS margin_pct,
+                               count(sr) AS orders,
+                               sum(sr.quantity * i.margin) AS margin_value
+                        ORDER BY margin_value DESC
+                        LIMIT 10
+                    """, line=selected_line, downtime_end=downtime_end)
+                    
+                    hm_data = []
+                    for row in hm_critical:
+                        hm_data.append({
+                            'Product': row['product'],
+                            'Description': row['name'][:40],
+                            'Margin %': f"{row['margin_pct']*100:.1f}%",
+                            'Orders': row['orders'],
+                            'Margin Value': f"${row['margin_value']:,.0f}"
+                        })
+                    
+                    if hm_data:
+                        st.dataframe(pd.DataFrame(hm_data), use_container_width=True, hide_index=True)
+                        st.warning("⚠️ Prioritize these high-margin products for expediting")
+                    else:
+                        st.info("No high-margin products shipping in critical period")
+                    
+                    # RECOMMENDATIONS
+                    st.markdown("---")
+                    st.markdown("### 💡 RECOMMENDED ACTIONS")
+                    
+                    if critical_orders > 0:
+                        st.markdown("""
+                        **IMMEDIATE (Next 24 hours):**
+                        1. 🔴 Assess must-win customer orders - expedite or negotiate
+                        2. 💎 Prioritize high-margin products (>40% margin)
+                        3. 🔧 Investigate alternative lines or overtime options
+                        4. 📞 Notify affected customers (especially must-wins)
+                        
+                        **MEDIUM TERM (24-72 hours):**
+                        5. 📋 Reschedule orders shipping after {downtime_end}
+                        6. 💰 Calculate expedite costs vs margin protection
+                        7. 🏭 Plan line restart sequence by priority
+                        
+                        **COST-BENEFIT:**
+                        - Critical period margin: ${critical_margin/1e6:.1f}M
+                        - Typical expedite cost: ~2-5% of order value
+                        - Protecting high-margin orders likely worth expediting
+                        """)
+                    else:
+                        st.success("""
+                        ✅ **GOOD NEWS:** No orders shipping in critical 3-day period
+                        
+                        **RECOMMENDED ACTIONS:**
+                        1. Use downtime for planned maintenance
+                        2. Optimize restart schedule for efficiency
+                        3. No immediate customer impact - no expediting needed
+                        """)
+                
                 else:
-                    st.warning("No FG production on this line")
+                    st.warning("No finished goods production on this line")
 
 st.markdown("---")
 st.caption("Production Control Tower | Berlin Pilot")
