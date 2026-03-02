@@ -106,9 +106,9 @@ with driver.session() as session:
     line_data = [(row['line'], row['orders'], row['revenue']) for row in lines_result]
 
 if line_data:
-    line_options = [f"{line} ({orders} orders, ${rev/1e6:.1f}M)" for line, orders, rev in line_data]
+    line_options = [f"{line} — {orders} orders, ${rev/1e6:.1f}M" for line, orders, rev in line_data]
     selected_option = st.selectbox("Select line:", line_options)
-    selected_line = selected_option.split(" (")[0]
+    selected_line = selected_option.split(" — ")[0]
     
     # DEBUG
     st.info(f"🔍 Searching for: `{selected_line}` (length: {len(selected_line)})")
