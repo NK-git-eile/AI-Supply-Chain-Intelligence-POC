@@ -107,8 +107,13 @@ if all([neo4j_uri, neo4j_password]):
             line_options = [f"{line} ({orders} orders, ${rev/1e6:.1f}M)" for line, orders, rev in line_data]
             selected_option = st.selectbox("Select line:", line_options)
             selected_line = selected_option.split(" (")[0].strip()
-            
-            if st.button("🔧 Simulate Downtime", type="primary"):
+
+# DEBUG OUTPUT
+st.write(f"**DEBUG:** Selected line = `{selected_line}`")
+st.write(f"**DEBUG:** Line length = {len(selected_line)}")
+st.write(f"**DEBUG:** Line repr = {repr(selected_line)}")
+
+if st.button("🔧 Simulate Downtime", type="primary"):
                 with driver.session() as session:
                     result = session.run("""
                         MATCH (sr:ScheduledReceipt)-[:ON_RESOURCE]->(r:Resource {line_name: $line})
