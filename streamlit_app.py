@@ -208,7 +208,9 @@ if all([neo4j_uri, neo4j_password]):
                 line_options
             )
             
-            selected_line = selected_line_option.split(" (")[0]
+            # Extract line name - be more careful
+selected_line = selected_line_option.split(" (")[0].strip()
+st.write(f"DEBUG: Looking for line: '{selected_line}'")  # Remove after testing
             
             if st.button("🔧 Simulate Line Downtime", type="primary"):
                 with st.spinner(f"Analyzing impact of {selected_line} downtime..."):
