@@ -183,124 +183,130 @@ if all([neo4j_uri, neo4j_password]):
         
         st.markdown("---")
         
+      st.markdown("---")
+        
         # LINE DOWNTIME SIMULATOR
         st.header("🚨 Line Downtime Impact Simulator")
         
-        with driver.session() as session:
-            lines_result = session.run("""
-                MATCH (sr:ScheduledReceipt)-[:ON_RESOURCE]->(r:Resource)
-                MATCH (sr)-[:FOR_ITEM]->(i:Item {item_type: 'FP'})
-                RETURN r.line_name AS line,
-                       count(sr) AS work_orders,
-                       sum(sr.quantity * i.asp) AS revenue
-                ORDER BY revenue DESC
-                LIMIT 10
-            """)
+        try:
+            with driver.session() as session:
+                lines_result = session.run("""
+                    MATCH (sr:ScheduledReceipt)-[:ON_RESOURCE]->(r:Resource)
+                    MATCH (sr)-[:FOR_ITEM]->(i:Item {item_type: 'FP'})
+                    RETURN r.line_name AS line,
+                           count(sr) AS work_orders,
+                           sum(sr.quantity * i.asp) AS revenue
+                    ORDER BY revenue DESC
+                    LIMIT 10
+                """)
+                
+                line_data = [(row['line'], row['work_orders'], row['revenue']) for row in lines_result]
             
-            line_data = [(row['line'], row['work_orders'], row['revenue']) for row in lines_result]
-        
-        if line_data:
-            line_options = [f"{line} ({orders} orders, ${rev/1e6:.1f}M)" 
-                           for line, orders, rev in line_data]
-            
-            selected_line_option = st.selectbox(
-                "Select production line to simulate downtime:",
-                line_options
-            )
-            
-            # Extract line name - be more careful
-selected_line = selected_line_option.split(" (")[0].strip()
-st.write(f"DEBUG: Looking for line: '{selected_line}'")  # Remove after testing
-            
-            if st.button("🔧 Simulate Line Downtime", type="primary"):
-                with st.spinner(f"Analyzing impact of {selected_line} downtime..."):
-                    
-                    with driver.session() as session:
-                        result = session.run("""
-                            MATCH (sr:ScheduledReceipt)-[:ON_RESOURCE]->(r:Resource {line_name: $line})
-                            MATCH (sr)-[:FOR_ITEM]->(i:Item {item_type: 'FP'})
-                            RETURN count(sr) AS work_orders,
-                                   count(DISTINCT i) AS products,
-                                   sum(sr.quantity) AS total_units,
-                                   sum(sr.quantity * i.asp) AS revenue_impact,
-                                   sum(sr.quantity * i.margin) AS margin_impact,
-                                   r.code AS resource_code
-                        """, line=selected_line).single()
+            if line_data:
+                line_options = [f"{line} ({orders} orders, ${rev/1e6:.1f}M)" 
+                               for line, orders, rev in line_data]
+                
+                selected_line_option = st.selectbox(
+                    "Select production line to simulate downtime:",
+                    line_options
+                )
+                
+                selected_line = selected_line_option.split(" (")[0].strip()
+                
+                if st.button("🔧 Simulate Line Downtime", type="primary"):
+                    with st.spinner(f"Analyzing impact of {selected_line} downtime..."):
                         
-                        if result and result['work_orders'] > 0:
-                            st.subheader(f"📊 Impact Analysis: {selected_line}")
-                            
-                            col1, col2, col3, col4 = st.columns(4)
-                            
-                            with col1:
-                                st.metric("Work Orders", f"{result['work_orders']}")
-                            with col2:
-                                st.metric("Products", f"{result['products']}")
-                            with col3:
-                                st.metric("Revenue at Risk", f"${result['revenue_impact']/1e6:.1f}M")
-                            with col4:
-                                st.metric("Margin at Risk", f"${result['margin_impact']/1e6:.1f}M")
-                            
-                            # Customer impact
-                            customer_result = session.run("""
+                        with driver.session() as session:
+                            result = session.run("""
                                 MATCH (sr:ScheduledReceipt)-[:ON_RESOURCE]->(r:Resource {line_name: $line})
-                                MATCH (sr)-[:FULFILLS]->(co)-[:FOR_CUSTOMER]->(c)
                                 MATCH (sr)-[:FOR_ITEM]->(i:Item {item_type: 'FP'})
-                                WITH c, 
-                                     sum(sr.quantity * i.margin) AS customer_margin,
-                                     coalesce(c.must_win, false) AS is_must_win
-                                RETURN count(DISTINCT c) AS total_customers,
-                                       sum(CASE WHEN is_must_win THEN 1 ELSE 0 END) AS must_win_customers,
-                                       sum(CASE WHEN is_must_win THEN customer_margin ELSE 0 END) AS must_win_margin
+                                RETURN count(sr) AS work_orders,
+                                       count(DISTINCT i) AS products,
+                                       sum(sr.quantity) AS total_units,
+                                       sum(sr.quantity * i.asp) AS revenue_impact,
+                                       sum(sr.quantity * i.margin) AS margin_impact,
+                                       r.code AS resource_code
                             """, line=selected_line).single()
                             
-                            col1, col2 = st.columns(2)
-                            
-                            with col1:
-                                st.metric("Customers Affected", customer_result['total_customers'])
-                            with col2:
-                                if customer_result['must_win_customers'] > 0:
-                                    st.metric(
-                                        "🔴 Must-Win Customers", 
-                                        customer_result['must_win_customers'],
-                                        delta=f"${customer_result['must_win_margin']/1e3:.0f}K margin",
-                                        delta_color="inverse"
-                                    )
+                            if result and result['work_orders'] > 0:
+                                st.subheader(f"📊 Impact Analysis: {selected_line}")
+                                
+                                col1, col2, col3, col4 = st.columns(4)
+                                
+                                with col1:
+                                    st.metric("Work Orders", f"{result['work_orders']}")
+                                with col2:
+                                    st.metric("Products", f"{result['products']}")
+                                with col3:
+                                    st.metric("Revenue at Risk", f"${result['revenue_impact']/1e6:.1f}M")
+                                with col4:
+                                    st.metric("Margin at Risk", f"${result['margin_impact']/1e6:.1f}M")
+                                
+                                # Customer impact
+                                customer_result = session.run("""
+                                    MATCH (sr:ScheduledReceipt)-[:ON_RESOURCE]->(r:Resource {line_name: $line})
+                                    MATCH (sr)-[:FULFILLS]->(co)-[:FOR_CUSTOMER]->(c)
+                                    MATCH (sr)-[:FOR_ITEM]->(i:Item {item_type: 'FP'})
+                                    WITH c, 
+                                         sum(sr.quantity * i.margin) AS customer_margin,
+                                         coalesce(c.must_win, false) AS is_must_win
+                                    RETURN count(DISTINCT c) AS total_customers,
+                                           sum(CASE WHEN is_must_win THEN 1 ELSE 0 END) AS must_win_customers,
+                                           sum(CASE WHEN is_must_win THEN customer_margin ELSE 0 END) AS must_win_margin
+                                """, line=selected_line).single()
+                                
+                                col1, col2 = st.columns(2)
+                                
+                                with col1:
+                                    st.metric("Customers Affected", customer_result['total_customers'])
+                                with col2:
+                                    if customer_result['must_win_customers'] > 0:
+                                        st.metric(
+                                            "🔴 Must-Win Customers", 
+                                            customer_result['must_win_customers'],
+                                            delta=f"${customer_result['must_win_margin']/1e3:.0f}K margin",
+                                            delta_color="inverse"
+                                        )
+                                    else:
+                                        st.metric("Must-Win Customers", "0", delta="✓ None affected")
+                                
+                                # High-margin products
+                                st.subheader("💎 High-Margin Products Affected (>40%)")
+                                high_margin_result = session.run("""
+                                    MATCH (sr:ScheduledReceipt)-[:ON_RESOURCE]->(r:Resource {line_name: $line})
+                                    MATCH (sr)-[:FOR_ITEM]->(i:Item {item_type: 'FP'})
+                                    WHERE i.margin_pct > 0.40
+                                    RETURN i.code AS product,
+                                           i.description AS name,
+                                           i.margin_pct AS margin_pct,
+                                           sum(sr.quantity) AS units,
+                                           sum(sr.quantity * i.margin) AS margin_value
+                                    ORDER BY margin_value DESC
+                                    LIMIT 10
+                                """, line=selected_line)
+                                
+                                hm_data = []
+                                for row in high_margin_result:
+                                    hm_data.append({
+                                        'Product': row['product'],
+                                        'Description': row['name'][:50],
+                                        'Margin %': f"{row['margin_pct']*100:.1f}%",
+                                        'Units': f"{row['units']:,.0f}",
+                                        'Margin Value': f"${row['margin_value']:,.0f}"
+                                    })
+                                
+                                if hm_data:
+                                    st.dataframe(pd.DataFrame(hm_data), use_container_width=True, hide_index=True)
                                 else:
-                                    st.metric("Must-Win Customers", "0", delta="✓ None affected")
+                                    st.info("No high-margin products on this line")
                             
-                            # High-margin products
-                            st.subheader("💎 High-Margin Products Affected (>40%)")
-                            high_margin_result = session.run("""
-                                MATCH (sr:ScheduledReceipt)-[:ON_RESOURCE]->(r:Resource {line_name: $line})
-                                MATCH (sr)-[:FOR_ITEM]->(i:Item {item_type: 'FP'})
-                                WHERE i.margin_pct > 0.40
-                                RETURN i.code AS product,
-                                       i.description AS name,
-                                       i.margin_pct AS margin_pct,
-                                       sum(sr.quantity) AS units,
-                                       sum(sr.quantity * i.margin) AS margin_value
-                                ORDER BY margin_value DESC
-                                LIMIT 10
-                            """, line=selected_line)
-                            
-                            hm_data = []
-                            for row in high_margin_result:
-                                hm_data.append({
-                                    'Product': row['product'],
-                                    'Description': row['name'][:50],
-                                    'Margin %': f"{row['margin_pct']*100:.1f}%",
-                                    'Units': f"{row['units']:,.0f}",
-                                    'Margin Value': f"${row['margin_value']:,.0f}"
-                                })
-                            
-                            if hm_data:
-                                st.dataframe(pd.DataFrame(hm_data), use_container_width=True, hide_index=True)
                             else:
-                                st.info("No high-margin products on this line")
-                        
-                        else:
-                            st.warning("No finished goods production found on this line")
+                                st.warning("No finished goods production found on this line")
+            else:
+                st.info("No production lines found with finished goods")
+        
+        except Exception as e:
+            st.error(f"Simulator error: {e}")
         
         st.markdown("---")
         
