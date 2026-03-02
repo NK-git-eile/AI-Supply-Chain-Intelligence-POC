@@ -18,13 +18,6 @@ st.markdown("""
         margin-bottom: 2rem;
         text-align: center;
     }
-    .metric-card {
-        background: white;
-        padding: 1rem;
-        border-radius: 8px;
-        border-left: 4px solid #3b82f6;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -64,7 +57,7 @@ if all([neo4j_uri, neo4j_password]):
         st.markdown(f"**Planning Horizon:** {current_time.strftime('%B %d')} - {(current_time + timedelta(days=7)).strftime('%B %d, %Y')}")
         
         with driver.session() as session:
-            # Shipping this week (Finished Goods only)
+            # Shipping this week
             shipping = session.run("""
                 MATCH (sr:ScheduledReceipt)-[:FOR_ITEM]->(i:Item {item_type: 'FP'})
                 WHERE sr.sched_date >= $start AND sr.sched_date <= $end
@@ -85,39 +78,36 @@ if all([neo4j_uri, neo4j_password]):
             high_margin = session.run("""
                 MATCH (sr:ScheduledReceipt)-[:FOR_ITEM]->(i:Item {item_type: 'FP'})
                 WHERE i.margin_pct > 0.40
-                RETURN sum(sr.quantity * i.margin) AS margin,
-                       sum(sr.quantity) AS units
+                RETURN sum(sr.quantity * i.margin) AS margin
             """).single()
             
-            # Work orders scheduled
+            # Work orders
             work_orders = session.run("""
                 MATCH (sr:ScheduledReceipt)-[:ON_RESOURCE]->(r:Resource)
                 MATCH (sr)-[:FOR_ITEM]->(i:Item {item_type: 'FP'})
                 RETURN count(sr) AS total
             """).single()
             
-            # Active production lines
+            # Active lines
             active_lines = session.run("""
                 MATCH (sr:ScheduledReceipt)-[:ON_RESOURCE]->(r:Resource)
                 MATCH (sr)-[:FOR_ITEM]->(i:Item {item_type: 'FP'})
                 RETURN count(DISTINCT r.line_name) AS total
             """).single()
             
-            # Products scheduled
+            # Products
             products = session.run("""
                 MATCH (sr:ScheduledReceipt)-[:FOR_ITEM]->(i:Item {item_type: 'FP'})
                 WHERE sr.sched_date >= $start AND sr.sched_date <= $end
                 RETURN count(DISTINCT i) AS count
             """, start=week_start, end=week_end).single()
             
-            # Total volume
+            # Volume
             volume = session.run("""
                 MATCH (sr:ScheduledReceipt)-[:FOR_ITEM]->(i:Item {item_type: 'FP'})
                 WHERE sr.sched_date >= $start AND sr.sched_date <= $end
                 RETURN sum(sr.quantity) AS total
             """, start=week_start, end=week_end).single()
-        
-        driver.close()
         
         # Display KPIs - Row 1
         col1, col2, col3, col4 = st.columns(4)
@@ -188,7 +178,7 @@ if all([neo4j_uri, neo4j_password]):
             st.metric(
                 "Data Status",
                 "✓ Live",
-                delta="Mock financials"
+                delta="Mock $"
             )
         
         st.markdown("---")
@@ -197,7 +187,6 @@ if all([neo4j_uri, neo4j_password]):
         st.header("🚨 Line Downtime Impact Simulator")
         
         with driver.session() as session:
-            # Get top production lines
             lines_result = session.run("""
                 MATCH (sr:ScheduledReceipt)-[:ON_RESOURCE]->(r:Resource)
                 MATCH (sr)-[:FOR_ITEM]->(i:Item {item_type: 'FP'})
@@ -208,26 +197,23 @@ if all([neo4j_uri, neo4j_password]):
                 LIMIT 10
             """)
             
-            line_options = [f"{row['line']} ({row['work_orders']} orders, ${row['revenue']/1e6:.1f}M)" 
-                           for row in lines_result]
+            line_data = [(row['line'], row['work_orders'], row['revenue']) for row in lines_result]
         
-        driver.close()
-        
-        if line_options:
+        if line_data:
+            line_options = [f"{line} ({orders} orders, ${rev/1e6:.1f}M)" 
+                           for line, orders, rev in line_data]
+            
             selected_line_option = st.selectbox(
                 "Select production line to simulate downtime:",
                 line_options
             )
             
-            # Extract just the line name (before the parenthesis)
             selected_line = selected_line_option.split(" (")[0]
             
             if st.button("🔧 Simulate Line Downtime", type="primary"):
                 with st.spinner(f"Analyzing impact of {selected_line} downtime..."):
-                    driver = GraphDatabase.driver(neo4j_uri, auth=(neo4j_user, neo4j_password))
                     
                     with driver.session() as session:
-                        # Get impact data
                         result = session.run("""
                             MATCH (sr:ScheduledReceipt)-[:ON_RESOURCE]->(r:Resource {line_name: $line})
                             MATCH (sr)-[:FOR_ITEM]->(i:Item {item_type: 'FP'})
@@ -242,7 +228,6 @@ if all([neo4j_uri, neo4j_password]):
                         if result and result['work_orders'] > 0:
                             st.subheader(f"📊 Impact Analysis: {selected_line}")
                             
-                            # Impact metrics
                             col1, col2, col3, col4 = st.columns(4)
                             
                             with col1:
@@ -284,7 +269,7 @@ if all([neo4j_uri, neo4j_password]):
                             
                             # High-margin products
                             st.subheader("💎 High-Margin Products Affected (>40%)")
-                            high_margin = session.run("""
+                            high_margin_result = session.run("""
                                 MATCH (sr:ScheduledReceipt)-[:ON_RESOURCE]->(r:Resource {line_name: $line})
                                 MATCH (sr)-[:FOR_ITEM]->(i:Item {item_type: 'FP'})
                                 WHERE i.margin_pct > 0.40
@@ -298,7 +283,7 @@ if all([neo4j_uri, neo4j_password]):
                             """, line=selected_line)
                             
                             hm_data = []
-                            for row in high_margin:
+                            for row in high_margin_result:
                                 hm_data.append({
                                     'Product': row['product'],
                                     'Description': row['name'][:50],
@@ -314,45 +299,30 @@ if all([neo4j_uri, neo4j_password]):
                         
                         else:
                             st.warning("No finished goods production found on this line")
-                    
-                    driver.close()
         
         st.markdown("---")
         
     except Exception as e:
-        st.error(f"Error loading dashboard: {e}")
-        st.info("Configure credentials in sidebar")
+        st.error(f"Error: {e}")
+        import traceback
+        st.code(traceback.format_exc())
+
 else:
-    st.warning("⚠️ Configure Neo4j and Claude credentials in sidebar")
+    st.warning("⚠️ Configure credentials in sidebar")
 
 # Query Interface
 st.header("💬 Interactive Query Interface")
 
-st.markdown("""
-Ask questions in plain English about your supply chain data. The AI will write and execute database queries.
-""")
+st.markdown("Ask questions in plain English. The AI will write and execute database queries.")
 
-# Sample questions
 with st.expander("📋 Sample Questions"):
     st.markdown("""
-    **Financial Analysis:**
-    - What's the total margin for products shipping this week?
-    - Show me high-margin products scheduled this month
-    - Which production lines have the highest revenue?
-    
-    **Production Lines:**
-    - Show me all active production lines with work orders
-    - Which lines make product 02961T-IC?
-    - What's scheduled on TFS 80/2 (Linie 5 NEU)?
-    
-    **Customer Analysis:**
-    - Show me must-win customers
-    - Which customers have the most orders?
-    - Show me customers with orders this week
+    **Financial:** What's the total margin for high-margin products?  
+    **Production:** Which lines have the most work orders?  
+    **Customers:** Show me must-win customers with orders this week
     """)
 
-# Question input
-question = st.text_area("Your question:", height=100, placeholder="e.g., Which production lines have the most high-margin work?")
+question = st.text_area("Your question:", height=100, placeholder="e.g., Which production lines have the highest revenue?")
 
 col1, col2 = st.columns([1, 4])
 
@@ -360,47 +330,25 @@ with col1:
     ask_button = st.button("🔍 Ask AI", type="primary", use_container_width=True)
 
 with col2:
-    show_query = st.checkbox("Show generated query", value=True)
+    show_query = st.checkbox("Show query", value=True)
 
 if ask_button:
     if not question.strip():
         st.warning("Please enter a question")
     elif not all([neo4j_uri, neo4j_password, claude_key]):
-        st.error("Please configure credentials in sidebar")
+        st.error("Configure credentials first")
     else:
-        with st.spinner("🤖 AI is processing..."):
+        with st.spinner("Processing..."):
             try:
                 client = anthropic.Anthropic(api_key=claude_key)
                 
-                query_prompt = f"""You are a Neo4j Cypher expert. Write a query to answer this question.
+                query_prompt = f"""Write a Neo4j Cypher query to answer this question.
 
-DATABASE SCHEMA:
+Schema: ScheduledReceipt-[:ON_RESOURCE]->Resource(line_name), ScheduledReceipt-[:FOR_ITEM]->Item(asp, margin, item_type), ScheduledReceipt-[:FULFILLS]->CustomerOrder-[:FOR_CUSTOMER]->Customer(must_win)
 
-Nodes:
-- ScheduledReceipt: item, site, quantity, sched_date, start_date
-- CustomerOrder: order_id, item, customer_number, ship_date, quantity
-- Customer: customer_number, country, must_win (boolean)
-- Item: code, description, item_type ('FP'=Finished, 'SFP'=Semi-Finished), asp, cogs, margin, margin_pct
-- Resource: code, line_name (e.g., "TFS 80/2 (Linie 5 NEU)"), site
-- ProductionMethod: name, item, location
-- ProductionStep: description, prod_rate, prod_rate_uom
+Return ONLY the query. Limit to 100 results.
 
-Relationships:
-- (ScheduledReceipt)-[:FOR_ITEM]->(Item)
-- (ScheduledReceipt)-[:FULFILLS]->(CustomerOrder)-[:FOR_CUSTOMER]->(Customer)
-- (ScheduledReceipt)-[:ON_RESOURCE]->(Resource)
-- (ScheduledReceipt)-[:USES_METHOD]->(ProductionMethod)-[:HAS_STEP]->(ProductionStep)-[:ON_RESOURCE]->(Resource)
-
-IMPORTANT:
-- Return ONLY the Cypher query
-- For production lines, use Resource.line_name
-- For financial data, use Item properties (asp, margin, margin_pct)
-- Filter to item_type: 'FP' for finished goods
-- Limit to 100 results
-
-QUESTION: {question}
-
-Return ONLY the Cypher query:
+Question: {question}
 """
                 
                 response = client.messages.create(
@@ -418,10 +366,7 @@ Return ONLY the Cypher query:
                     query = query.strip()
                 
                 if show_query:
-                    st.subheader("Generated Query")
                     st.code(query, language="cypher")
-                
-                st.subheader("Results")
                 
                 driver = GraphDatabase.driver(neo4j_uri, auth=(neo4j_user, neo4j_password))
                 
@@ -429,29 +374,22 @@ Return ONLY the Cypher query:
                     result = session.run(query)
                     data = [dict(r) for r in result]
                 
-                driver.close()
-                
                 if len(data) == 0:
-                    st.info("No results found")
+                    st.info("No results")
                 else:
-                    st.success(f"✓ Found {len(data)} results")
+                    st.success(f"✓ {len(data)} results")
                     df = pd.DataFrame(data)
                     st.dataframe(df, use_container_width=True)
                     
-                    csv = df.to_csv(index=False)
                     st.download_button(
                         "📥 Download CSV",
-                        data=csv,
-                        file_name="results.csv",
-                        mime="text/csv"
+                        df.to_csv(index=False),
+                        "results.csv",
+                        "text/csv"
                     )
             
             except Exception as e:
-                st.error(f"❌ Error: {str(e)}")
+                st.error(f"Error: {str(e)}")
 
 st.markdown("---")
-st.markdown("""
-**Production Control Tower - Berlin Pilot**  
-Real Blue Yonder data | Mock financial estimates | Built in 2 days for POC  
-Data: 23 production lines, 1,123 methods, 2,286 steps, 583 products
-""")
+st.markdown("**Production Control Tower - Berlin Pilot** | Real Blue Yonder data | Mock financials | Built in 2 days")
