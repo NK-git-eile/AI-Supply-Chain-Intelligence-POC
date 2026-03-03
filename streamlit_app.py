@@ -42,7 +42,7 @@ if st.session_state.show_intro:
         st.markdown("## 👋 Welcome to AI Operations Intelligence")
         st.markdown("""
         <div style='background: #f0f4ff; border-left: 4px solid #3b82f6; padding: 0.75rem 1rem; border-radius: 4px; margin-bottom: 0.75rem;'>
-            <span style='font-size: 1.1rem;'>A proof of concept demonstrating <strong>AI-enabled insights on live manufacturing data</strong>. This capability could evolve into a full Production Control Tower with KPIs, root cause analysis, and Appian workflow integration.</span>
+            <span style='font-size: 1.1rem;'>A proof of concept demonstrating <strong>AI-enabled insights on live manufacturing data</strong>. This capability could evolve into a full Production Control Tower with KPIs, root cause analysis, and Appian workflow integration to ensure <strong>PLANS are realized through ALIGNED EXECUTION</strong>.</span>
         </div>
         """, unsafe_allow_html=True)
         
@@ -209,8 +209,8 @@ RETURN sr.item, i.description, sr.quantity""", language="cypher")
         """)
         
         st.markdown("""
-        <div style='background: #f0f4ff; border-left: 4px solid #6366f1; padding: 0.5rem 0.8rem; border-radius: 4px; font-size: 0.9em;'>
-            <strong>🔮 Future Vision:</strong> With validated value, this PoC could grow into a full Control Tower — adding live KPIs, root cause analysis, and Appian workflows for executing recommended actions directly.
+        <div style='background: #f0f4ff; border-left: 4px solid #6366f1; padding: 0.75rem 1rem; border-radius: 4px;'>
+            <span style='font-size: 1.1rem;'><strong>🔮 Future Vision:</strong> Evolve this PoC into a full <strong>AI-enabled Control Tower</strong> with live KPIs, root cause analysis, and Appian workflows to execute recommended actions — ensuring <strong>planning and execution are in synch</strong>.</span>
         </div>
         """, unsafe_allow_html=True)
         
