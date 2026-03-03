@@ -608,6 +608,7 @@ with col_left:
             st.session_state.ai_result_query = None
             st.session_state.ai_result_insight = None
             st.session_state.ai_result_empty_msg = None
+            st.session_state.auto_run = True
             st.rerun()
     
     # Initialize text area key counter for resetting
@@ -653,7 +654,15 @@ if 'ai_result_data' not in st.session_state:
     st.session_state.ai_result_empty_msg = None
 
 with col_left:
-    if ask_button and question and all([neo4j_uri, neo4j_password, claude_key]):
+    # Auto-run from dropdown selection or manual Ask AI
+    should_run = False
+    if st.session_state.get('auto_run') and question and all([neo4j_uri, neo4j_password, claude_key]):
+        should_run = True
+        st.session_state.auto_run = False
+    elif ask_button and question and all([neo4j_uri, neo4j_password, claude_key]):
+        should_run = True
+    
+    if should_run:
         # Log usage to session state
         if 'usage_log' not in st.session_state:
             st.session_state.usage_log = []
