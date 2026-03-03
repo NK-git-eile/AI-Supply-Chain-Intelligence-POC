@@ -432,7 +432,7 @@ with col_left:
         ],
         "⏰ Scenario Planning": [
             "If Line 5 goes down Thursday and Friday, what revenue is at risk?",
-            "If Line 5 goes down for 3 days, what is the impact?",
+            "If production is running ahead of schedule on Line 5, which order should we pull into this week?",
             "What happens if item 01742BAL cannot run on Line 5 this week?"
         ],
         "🔧 Operations": [
@@ -513,15 +513,22 @@ with col_left:
             ORDER BY revenue DESC
             LIMIT 100""",
         
-        "If Line 5 goes down for 3 days, what is the impact?": """
+        "If production is running ahead of schedule on Line 5, which order should we pull into this week?": """
             MATCH (sr:ScheduledReceipt)-[:ON_RESOURCE]->(r:Resource {line_name: 'TFS 80/2 (Linie 5 NEU)'})
             MATCH (sr)-[:FOR_ITEM]->(i:Item)
-            WHERE sr.start_date IN ['3-Mar-26', '4-Mar-26', '5-Mar-26'] AND i.item_type IN ['FP', 'SFP']
-            RETURN sr.item, i.description, sr.start_date, sr.quantity,
-                   round(sr.quantity * i.asp) AS revenue, round(sr.quantity * i.margin) AS margin,
-                   i.margin_pct
-            ORDER BY revenue DESC
-            LIMIT 100""",
+            WHERE NOT sr.start_date IN ['2-Mar-26', '3-Mar-26', '4-Mar-26', '5-Mar-26', '6-Mar-26', '7-Mar-26', '8-Mar-26']
+              AND i.item_type IN ['FP', 'SFP']
+            OPTIONAL MATCH (sr)-[:FULFILLS]->(co)-[:FOR_CUSTOMER]->(c:Customer)
+            WITH sr, i, c,
+                 CASE WHEN c.must_win = true THEN 1 ELSE 0 END AS is_must_win,
+                 round(sr.quantity * i.asp) AS revenue,
+                 round(sr.quantity * i.margin) AS margin
+            RETURN sr.item, i.description, sr.start_date, sr.sched_date, sr.quantity,
+                   revenue, margin, i.margin_pct,
+                   CASE WHEN is_must_win = 1 THEN 'YES' ELSE 'NO' END AS must_win_customer,
+                   c.customer_number AS customer
+            ORDER BY is_must_win DESC, margin DESC
+            LIMIT 20""",
         
         "What happens if item 01742BAL cannot run on Line 5 this week?": """
             MATCH (sr:ScheduledReceipt {item: '01742BAL'})-[:ON_RESOURCE]->(r:Resource {line_name: 'TFS 80/2 (Linie 5 NEU)'})
