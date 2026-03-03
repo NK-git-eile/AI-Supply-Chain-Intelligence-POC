@@ -48,9 +48,6 @@ st.markdown("""
         margin: 0.25rem 0 0 0;
         opacity: 0.9;
     }
-    .suggested-prompt {
-        margin: 0.25rem;
-    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -133,64 +130,71 @@ col_left, col_right = st.columns(2)
 with col_left:
     st.subheader("💬 Ask Questions")
     
-    # Suggested prompts
-    st.markdown("**💡 Try these questions:**")
+    # Question categories with dropdowns
+    st.markdown("**💡 Select a category, then choose a question:**")
     
-    suggested_prompts = [
-        "Which customer orders depend on Line 5 production this week?",
-        "Which high-margin products are starting on Line 5 this week?",
-        "If Line 5 goes down Thursday and Friday, what revenue is at risk?",
-        "Are any must-win customers affected by Line 5 this week?",
-        "Which other lines can make the products scheduled on Line 5 this week?",
-        "Show me the highest margin work order starting on Line 5 this week",
-        "Which production line has the most revenue this week?",
-        "How many work orders start on Line 5 this week?"
-    ]
+    # Initialize session state
+    if 'selected_category' not in st.session_state:
+        st.session_state.selected_category = None
+    if 'selected_question' not in st.session_state:
+        st.session_state.selected_question = ""
     
-    # Create 2 columns for buttons
-    col_p1, col_p2 = st.columns(2)
+    # Define question categories
+    question_categories = {
+        "📊 Financial Analysis": [
+            "Which high-margin products are starting on Line 5 this week?",
+            "Show me the highest margin work order starting on Line 5 this week",
+            "What is the total revenue scheduled on Line 5 this week?"
+        ],
+        "👥 Customer Impact": [
+            "Which customer orders depend on Line 5 production this week?",
+            "Are any must-win customers affected by Line 5 this week?",
+            "Show all must-win customer orders"
+        ],
+        "⏰ Scenario Planning": [
+            "If Line 5 goes down Thursday and Friday, what revenue is at risk?",
+            "If Line 5 goes down for 3 days, what is the impact?",
+            "What happens if item 01742BAL cannot run on Line 5 this week?"
+        ],
+        "🔧 Operations": [
+            "Which other lines can make the products scheduled on Line 5 this week?",
+            "How many work orders start on Line 5 this week?",
+            "Which production line has the most revenue this week?",
+            "List all work orders starting on Line 5 this week"
+        ]
+    }
     
-    for idx, prompt in enumerate(suggested_prompts):
-        # Alternate between columns
-        target_col = col_p1 if idx % 2 == 0 else col_p2
-        
+    # Category buttons
+    col_cat1, col_cat2 = st.columns(2)
+    categories = list(question_categories.keys())
+    
+    for idx, category in enumerate(categories):
+        target_col = col_cat1 if idx % 2 == 0 else col_cat2
         with target_col:
-            # Create short label for button
-            if "customer orders depend" in prompt:
-                label = "👥 Customer Dependencies"
-            elif "high-margin products" in prompt:
-                label = "💎 High-Margin Products"
-            elif "Thursday and Friday" in prompt:
-                label = "⏰ Thu/Fri Downtime"
-            elif "must-win" in prompt:
-                label = "🎯 Must-Win Check"
-            elif "other lines" in prompt:
-                label = "🔧 Alternative Lines"
-            elif "highest margin" in prompt:
-                label = "📊 Top Margin Order"
-            elif "most revenue" in prompt:
-                label = "🏆 Highest Revenue Line"
-            elif "How many" in prompt:
-                label = "📋 Order Count"
-            else:
-                label = prompt[:30] + "..."
-            
-            if st.button(label, key=f"prompt_{idx}", use_container_width=True):
-                st.session_state.current_question = prompt
-                st.rerun()
+            if st.button(category, key=f"cat_{idx}", use_container_width=True):
+                st.session_state.selected_category = category
     
-    # Initialize session state if not exists
-    if 'current_question' not in st.session_state:
-        st.session_state.current_question = ''
+    # Show dropdown if category selected
+    if st.session_state.selected_category:
+        st.markdown(f"**{st.session_state.selected_category}**")
+        questions = question_categories[st.session_state.selected_category]
+        
+        selected = st.selectbox(
+            "Choose a question:",
+            [""] + questions,
+            key="question_dropdown"
+        )
+        
+        if selected:
+            st.session_state.selected_question = selected
     
     # Question text area
     question = st.text_area(
-        "", 
+        "Your Question:", 
         height=100, 
-        placeholder="Or type your own question...",
-        value=st.session_state.current_question,
-        label_visibility="collapsed",
-        key="question_input"
+        value=st.session_state.selected_question,
+        placeholder="Select a category above or type your own question...",
+        key="question_text"
     )
     
     col_btn1, col_btn2 = st.columns([1, 1])
@@ -292,8 +296,6 @@ Query:"""}]
                     
                     # AI interpretation of results
                     with st.spinner("Interpreting results..."):
-                        data_sample = pd.DataFrame(data).head(20).to_dict('records')
-                        
                         interpret_response = client.messages.create(
                             model="claude-sonnet-4-20250514",
                             max_tokens=250,
