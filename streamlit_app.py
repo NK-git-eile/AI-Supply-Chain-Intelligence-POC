@@ -462,6 +462,10 @@ with col_left:
             st.session_state.selected_question = selected_from_dropdown
             st.session_state.selected_category = None
             st.session_state.question_key = st.session_state.get('question_key', 0) + 1
+            st.session_state.ai_result_data = None
+            st.session_state.ai_result_query = None
+            st.session_state.ai_result_insight = None
+            st.session_state.ai_result_empty_msg = None
             st.rerun()
     
     # Initialize text area key counter for resetting
