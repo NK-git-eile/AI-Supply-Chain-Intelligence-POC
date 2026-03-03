@@ -48,7 +48,8 @@ if st.session_state.show_intro:
             st.markdown("""
             ### 📊 Live Berlin Manufacturing Data
             
-            **Last Updated:** February 28, 2026 (Last Friday)
+            **Data Source:** Blue Yonder Production Plan  
+            **Plan Date:** February 28, 2026 (Last Friday)
             
             **Production Data:**
             - Production schedules (ScheduledReceipts)
@@ -84,6 +85,14 @@ if st.session_state.show_intro:
             
             *Financial figures are placeholder values for demonstration purposes.*
             """)
+        
+        st.markdown("---")
+        
+        st.info("""
+        ### 💬 We Want Your Feedback!
+        
+        This is a proof of concept. Your input is invaluable! Please use the **Feedback** section in the left sidebar to share your thoughts, suggestions, or any issues you encounter.
+        """)
         
         col_btn1, col_btn2, col_btn3 = st.columns([1, 1, 1])
         with col_btn2:
@@ -213,6 +222,8 @@ if st.session_state.show_intro:
         ### ✅ You're Ready!
         
         Start by selecting a question category or use the simulator to explore line downtime scenarios.
+        
+        **Don't forget:** Share your feedback using the sidebar form!
         """)
         
         col_btn1, col_btn2 = st.columns([1, 2])
@@ -260,7 +271,8 @@ with st.sidebar:
     
     # Feedback Form
     st.subheader("💬 Feedback")
-    feedback = st.text_area("Share your thoughts:", height=100, key="feedback_text", placeholder="What do you think of this tool?")
+    st.markdown("*Your input helps us improve this tool!*")
+    feedback = st.text_area("Share your thoughts:", height=100, key="feedback_text", placeholder="What works well? What could be better?")
     
     if st.button("Submit Feedback", use_container_width=True):
         if feedback:
@@ -293,7 +305,7 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # Prominent Mock Data Warning
-st.warning("⚠️ **DEMO DATA NOTICE:** This dashboard uses real production schedules and inventory from Berlin manufacturing. **Financial data (ASP, COGS, margin) are mock values for demonstration purposes only.**")
+st.warning("⚠️ **DEMO DATA NOTICE:** This dashboard uses real production schedules and inventory from Berlin manufacturing (Blue Yonder plan dated Feb 28, 2026). **Financial data (ASP, COGS, margin) are mock values for demonstration purposes only.**")
 
 if not all([neo4j_uri, neo4j_password]):
     st.warning("⚠️ Configure credentials in sidebar")
@@ -399,7 +411,6 @@ with col_left:
                 st.session_state.selected_category = category
     
     # Show dropdown if category selected
-    selected_from_dropdown = None
     if st.session_state.selected_category:
         st.markdown(f"**{st.session_state.selected_category}**")
         questions = question_categories[st.session_state.selected_category]
@@ -407,28 +418,27 @@ with col_left:
         selected_from_dropdown = st.selectbox(
             "Choose a question:",
             ["Select a question..."] + questions,
-            key="question_dropdown"
+            index=0
         )
         
-        if selected_from_dropdown and selected_from_dropdown != "Select a question...":
+        if selected_from_dropdown != "Select a question...":
             st.session_state.selected_question = selected_from_dropdown
-            # Clear category to hide dropdown
             st.session_state.selected_category = None
             st.rerun()
     
-    # Question text area
+    # Question text area (no key parameter to avoid conflicts)
     question = st.text_area(
         "Your Question:", 
         height=100, 
         value=st.session_state.get('selected_question', ''),
-        placeholder="Select a category above or type your own question...",
-        key="question_text"
+        placeholder="Select a category above or type your own question..."
     )
     
-    # Clear button to reset
+    # Clear button
     if st.session_state.get('selected_question', ''):
-        if st.button("Clear Question", key="clear_btn"):
+        if st.button("🔄 Clear & Start Over"):
             st.session_state.selected_question = ""
+            st.session_state.selected_category = None
             st.rerun()
     
     col_btn1, col_btn2 = st.columns([1, 1])
@@ -757,4 +767,4 @@ with col_right:
                         for rec in recs:
                             st.markdown(rec)
 
-st.caption("Production Control Tower - Berlin Pilot | Real data + Mock financials | 🔒 Secure Access")
+st.caption("Production Control Tower - Berlin Pilot | Blue Yonder data (Feb 28, 2026) + Mock financials | 🔒 Secure Access")
