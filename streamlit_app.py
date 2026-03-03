@@ -3,6 +3,7 @@ from neo4j import GraphDatabase
 import anthropic
 import pandas as pd
 from datetime import datetime, timedelta
+import os
 
 st.set_page_config(page_title="Production Control Tower", page_icon="🔗", layout="wide")
 
@@ -28,6 +29,203 @@ if not st.session_state.authenticated:
             else:
                 st.error("❌ Incorrect password")
     st.stop()
+
+# Interactive Intro Slides
+if 'show_intro' not in st.session_state:
+    st.session_state.show_intro = True
+if 'intro_page' not in st.session_state:
+    st.session_state.intro_page = 1
+
+if st.session_state.show_intro:
+    
+    # Slide 1: Data Overview
+    if st.session_state.intro_page == 1:
+        st.markdown("## 👋 Welcome to Production Control Tower")
+        
+        col1, col2 = st.columns([1, 1])
+        
+        with col1:
+            st.markdown("""
+            ### 📊 Live Berlin Manufacturing Data
+            
+            **Last Updated:** February 28, 2026 (Last Friday)
+            
+            **Production Data:**
+            - Production schedules (ScheduledReceipts)
+            - Production resources (Lines & equipment)
+            - Production methods & steps
+            
+            **Master Data:**
+            - Item master (Products)
+            - Customer master (Accounts)
+            - Must-win customer flags
+            
+            **Inventory Data:**
+            - On-hand inventory levels
+            - Quarantine status
+            - Available vs. reserved quantities
+            """)
+        
+        with col2:
+            st.markdown("""
+            ### ⚠️ Important Notice
+            
+            **Real Data:**
+            - ✅ Production schedules
+            - ✅ Inventory levels
+            - ✅ Customer orders
+            - ✅ Line assignments
+            - ✅ Production methods
+            
+            **Mock Data (Demo Only):**
+            - ⚠️ ASP (Average Selling Price)
+            - ⚠️ COGS (Cost of Goods Sold)
+            - ⚠️ Margin calculations
+            
+            *Financial figures are placeholder values for demonstration purposes.*
+            """)
+        
+        col_btn1, col_btn2, col_btn3 = st.columns([1, 1, 1])
+        with col_btn2:
+            if st.button("Next: How It Works →", use_container_width=True, type="primary"):
+                st.session_state.intro_page = 2
+                st.rerun()
+        with col_btn3:
+            if st.button("Skip Intro", use_container_width=True):
+                st.session_state.show_intro = False
+                st.rerun()
+    
+    # Slide 2: How Queries Work
+    elif st.session_state.intro_page == 2:
+        st.markdown("## 🤖 How AI Queries Work")
+        
+        st.markdown("""
+        ### Ask questions in plain English, get instant insights
+        """)
+        
+        # Visual flow
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.markdown("""
+            **1️⃣ You Ask**
+            
+            💬 "Which customers depend on Line 5?"
+            
+            Natural language question
+            """)
+        
+        with col2:
+            st.markdown("""
+            **2️⃣ AI Generates**
+            
+            🔄 Creates Neo4j query
+            
+            Cypher code generated
+            """)
+        
+        with col3:
+            st.markdown("""
+            **3️⃣ Data Returns**
+            
+            📊 Work orders, customers, financials
+            
+            Real-time results
+            """)
+        
+        with col4:
+            st.markdown("""
+            **4️⃣ AI Interprets**
+            
+            💡 "15 orders affect 12 customers"
+            
+            Business insight
+            """)
+        
+        st.markdown("---")
+        
+        # Interactive example
+        with st.expander("🔍 See an Example Query", expanded=True):
+            st.markdown("""
+            **Example Question:**  
+            *"Which high-margin products are starting on Line 5 this week?"*
+            
+            **AI Generates This Query:**
+```cypher
+            MATCH (sr:ScheduledReceipt)-[:ON_RESOURCE]->(r:Resource {line_name: 'TFS 80/2 (Linie 5 NEU)'})
+            MATCH (sr)-[:FOR_ITEM]->(i:Item)
+            WHERE sr.start_date IN ['2-Mar-26', '3-Mar-26', '4-Mar-26', '5-Mar-26', '6-Mar-26', '7-Mar-26', '8-Mar-26']
+              AND i.margin_pct > 0.40
+            RETURN sr.item, i.description, sr.quantity
+```
+            
+            **AI Interprets Result:**  
+            💡 *"8 unique high-margin products account for 9 work orders starting this week, generating $3.35M in total margin"*
+            """)
+        
+        col_btn1, col_btn2, col_btn3 = st.columns([1, 1, 1])
+        with col_btn1:
+            if st.button("← Back", use_container_width=True):
+                st.session_state.intro_page = 1
+                st.rerun()
+        with col_btn2:
+            if st.button("Next: Quick Start →", use_container_width=True, type="primary"):
+                st.session_state.intro_page = 3
+                st.rerun()
+        with col_btn3:
+            if st.button("Skip Intro", use_container_width=True):
+                st.session_state.show_intro = False
+                st.rerun()
+    
+    # Slide 3: Quick Start
+    elif st.session_state.intro_page == 3:
+        st.markdown("## 🚀 Quick Start Guide")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("""
+            ### 💬 Ask Questions
+            
+            **Choose from 4 categories:**
+            - 📊 Financial Analysis
+            - 👥 Customer Impact
+            - ⏰ Scenario Planning
+            - 🔧 Operations
+            
+            Or type your own question!
+            """)
+        
+        with col2:
+            st.markdown("""
+            ### 🚨 Line Downtime Simulator
+            
+            **Test scenarios:**
+            - Select a production line
+            - Click "Simulate 3-Day Downtime"
+            - See instant impact analysis
+            - Get prioritized recommendations
+            """)
+        
+        st.markdown("---")
+        
+        st.success("""
+        ### ✅ You're Ready!
+        
+        Start by selecting a question category or use the simulator to explore line downtime scenarios.
+        """)
+        
+        col_btn1, col_btn2 = st.columns([1, 2])
+        with col_btn1:
+            if st.button("← Back", use_container_width=True):
+                st.session_state.intro_page = 2
+                st.rerun()
+        with col_btn2:
+            if st.button("🎯 Start Exploring", use_container_width=True, type="primary"):
+                st.session_state.show_intro = False
+                st.rerun()
+    
+    st.stop()  # Don't show main app until intro complete
 
 st.markdown("""
 <style>
@@ -59,6 +257,29 @@ with st.sidebar:
     claude_key = st.text_input("Claude API Key", type="password", value=st.secrets.get("CLAUDE_API_KEY", ""))
     
     st.markdown("---")
+    
+    # Feedback Form
+    st.subheader("💬 Feedback")
+    feedback = st.text_area("Share your thoughts:", height=100, key="feedback_text", placeholder="What do you think of this tool?")
+    
+    if st.button("Submit Feedback", use_container_width=True):
+        if feedback:
+            # Save to file
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            feedback_dir = "/mnt/user-data/outputs"
+            os.makedirs(feedback_dir, exist_ok=True)
+            
+            with open(f"{feedback_dir}/feedback.txt", "a") as f:
+                f.write(f"\n{'='*60}\n")
+                f.write(f"Timestamp: {timestamp}\n")
+                f.write(f"Feedback: {feedback}\n")
+            
+            st.success("✅ Thank you! Feedback submitted.")
+            st.session_state.feedback_submitted = True
+        else:
+            st.error("Please enter feedback")
+    
+    st.markdown("---")
     if st.button("🚪 Logout"):
         st.session_state.authenticated = False
         st.rerun()
@@ -70,6 +291,9 @@ st.markdown(f"""
     <p>{current_time.strftime('%B %d, %Y')} | {current_time.strftime('%H:%M')} CET</p>
 </div>
 """, unsafe_allow_html=True)
+
+# Prominent Mock Data Warning
+st.warning("⚠️ **DEMO DATA NOTICE:** This dashboard uses real production schedules and inventory from Berlin manufacturing. **Financial data (ASP, COGS, margin) are mock values for demonstration purposes only.**")
 
 if not all([neo4j_uri, neo4j_password]):
     st.warning("⚠️ Configure credentials in sidebar")
@@ -175,27 +399,37 @@ with col_left:
                 st.session_state.selected_category = category
     
     # Show dropdown if category selected
+    selected_from_dropdown = None
     if st.session_state.selected_category:
         st.markdown(f"**{st.session_state.selected_category}**")
         questions = question_categories[st.session_state.selected_category]
         
-        selected = st.selectbox(
+        selected_from_dropdown = st.selectbox(
             "Choose a question:",
-            [""] + questions,
+            ["Select a question..."] + questions,
             key="question_dropdown"
         )
         
-        if selected:
-            st.session_state.selected_question = selected
+        if selected_from_dropdown and selected_from_dropdown != "Select a question...":
+            st.session_state.selected_question = selected_from_dropdown
+            # Clear category to hide dropdown
+            st.session_state.selected_category = None
+            st.rerun()
     
     # Question text area
     question = st.text_area(
         "Your Question:", 
         height=100, 
-        value=st.session_state.selected_question,
+        value=st.session_state.get('selected_question', ''),
         placeholder="Select a category above or type your own question...",
         key="question_text"
     )
+    
+    # Clear button to reset
+    if st.session_state.get('selected_question', ''):
+        if st.button("Clear Question", key="clear_btn"):
+            st.session_state.selected_question = ""
+            st.rerun()
     
     col_btn1, col_btn2 = st.columns([1, 1])
     with col_btn1:
@@ -204,6 +438,12 @@ with col_left:
         show_query = st.checkbox("Show query", value=False)
     
     if ask_button and question and all([neo4j_uri, neo4j_password, claude_key]):
+        # Log usage
+        usage_dir = "/mnt/user-data/outputs"
+        os.makedirs(usage_dir, exist_ok=True)
+        with open(f"{usage_dir}/usage_log.txt", "a") as f:
+            f.write(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}: {question}\n")
+        
         with st.spinner("Analyzing..."):
             try:
                 client = anthropic.Anthropic(api_key=claude_key)
