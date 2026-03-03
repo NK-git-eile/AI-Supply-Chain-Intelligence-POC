@@ -87,10 +87,10 @@ if st.session_state.show_intro:
         
         st.markdown("---")
         
-        st.info("""
-        ### 💬 We Want Your Feedback!
+        st.markdown("""
+        > **📌 Definitions:** "High margin" = margin > 40% (`margin_pct > 0.40`)
         
-        This is a proof of concept. Your input is invaluable! Please use the **Feedback** section in the left sidebar to share your thoughts, suggestions, or any issues you encounter.
+        > **💬 Feedback?** Use the sidebar form — your input helps us improve this tool.
         """)
         
         col_btn1, col_btn2, col_btn3 = st.columns([1, 1, 1])
@@ -485,7 +485,7 @@ SCHEMA:
 Nodes:
 - ScheduledReceipt: item (string), site (string), start_date (string), sched_date (string), quantity (float), line (string - production method)
 - Resource: line_name (string - physical line), code (string), site (string)
-- Item: code (string), item_type (string: 'FP' or 'SFP'), asp (float), margin (float), margin_pct (float), description (string)
+- Item: code (string), item_type (string: 'FP' or 'SFP'), asp (float), margin (float), margin_pct (float - DECIMAL format: 0.40 = 40%, 0.25 = 25%. NEVER use integer percentages like 40 or 25), description (string)
 - Customer: customer_number (string), must_win (boolean), country (string)
 - Inventory: quantity (float), is_quarantine (boolean)
 
@@ -494,6 +494,13 @@ Relationships:
 - (ScheduledReceipt)-[:FOR_ITEM]->(Item)
 - (ScheduledReceipt)-[:FULFILLS]->(CustomerOrder)-[:FOR_CUSTOMER]->(Customer)
 - (Inventory)-[:FOR_ITEM]->(Item)
+
+VALUE FORMAT RULES (CRITICAL - follow exactly):
+- margin_pct is a DECIMAL between 0 and 1. Example: 0.40 means 40%, 0.25 means 25%
+- "high margin" means margin_pct > 0.40 (i.e., above 40%)
+- NEVER write margin_pct > 20 or margin_pct > 40 — these are WRONG. Always use decimals like 0.20, 0.40
+- asp and margin are dollar amounts per unit (floats)
+- quantity is a float (number of units)
 
 LINE NAME MAPPING (users refer to lines casually - ALWAYS use the EXACT string after the arrow):
 - "Line 1" / "Linie 1" / "Bosch" / "Bosch 1"         → 'BOSCH 1 (Linie 1)'
@@ -592,6 +599,18 @@ Query:"""}]
                 for casual, exact in casual_to_exact.items():
                     if casual in query:
                         query = query.replace(casual, exact)
+                
+                # ----- VALIDATION: Fix margin_pct integer values -----
+                # Catch cases where AI writes margin_pct > 40 instead of > 0.40
+                import re
+                margin_pattern = re.compile(r'margin_pct\s*([><=!]+)\s*(\d+)(?!\.\d)')
+                def fix_margin(match):
+                    operator = match.group(1)
+                    value = int(match.group(2))
+                    if value > 1:  # It's an integer percentage, convert to decimal
+                        return f'margin_pct {operator} {value / 100}'
+                    return match.group(0)
+                query = margin_pattern.sub(fix_margin, query)
                 # ----- END VALIDATION -----
                 
                 if show_query:
