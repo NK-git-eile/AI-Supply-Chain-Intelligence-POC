@@ -254,8 +254,43 @@ Query:"""}]
                     data = [dict(r) for r in session.run(query)]
                 
                 if data:
-                    st.success(f"✓ {len(data)} results")
+                    # Show the data table
                     st.dataframe(pd.DataFrame(data), use_container_width=True, height=300)
+                    
+                    # AI interpretation of results
+                    with st.spinner("Interpreting results..."):
+                        # Prepare data sample for AI (limit to 20 rows to avoid token limits)
+                        data_sample = pd.DataFrame(data).head(20).to_dict('records')
+                        
+                        interpret_response = client.messages.create(
+                            model="claude-sonnet-4-20250514",
+                            max_tokens=250,
+                            messages=[{"role": "user", "content": f"""The user asked: "{question}"
+
+The query returned {len(data)} results.
+
+Sample of the data (first 20 rows):
+{pd.DataFrame(data).head(20).to_string()}
+
+Provide a brief, insightful summary answering the user's question. Focus on:
+- Key numbers and totals
+- Important patterns or insights
+- Direct answer to what they asked
+
+Be concise (2-3 sentences maximum). Use natural business language.
+
+Examples:
+- "All 15 products starting on Line 5 this week are high-margin (>40%), representing $4.4M in margin value"
+- "Line 9 has the highest revenue this week at $45.2M across 28 work orders"
+- "Customer orders span 12 countries, with Germany and Spain accounting for 65% of the volume"
+- "5 alternative lines can produce these products: LINIE 9, BOSCH 1, and Linie 6"
+
+Summary:"""}]
+                        )
+                        
+                        summary = interpret_response.content[0].text.strip()
+                        st.info(f"💡 **Insight:** {summary}")
+                    
                 else:
                     # Smart interpretation of empty results
                     interpret_response = client.messages.create(
@@ -309,7 +344,6 @@ with col_right:
             with st.spinner("Analyzing..."):
                 with driver.session() as session:
                     
-                    # Total impact (all orders - FP and SFP)
                     total = session.run("""
                         MATCH (sr:ScheduledReceipt)-[:ON_RESOURCE]->(r:Resource {line_name: $line})
                         MATCH (sr)-[:FOR_ITEM]->(i:Item)
@@ -323,7 +357,6 @@ with col_right:
                     if not total or total['orders'] == 0:
                         st.error("❌ No production found")
                     else:
-                        # Analysis Trail
                         with st.expander("🔍 Analysis Trail", expanded=True):
                             st.markdown("### 📊 TOTAL IMPACT (All Scheduled Orders)")
                             st.success(f"✓ {total['orders']} total work orders on this line")
@@ -333,7 +366,6 @@ with col_right:
                             st.markdown("---")
                             st.markdown("### ⏰ CRITICAL THIS WEEK (March 2-8)")
                             
-                            # This week orders
                             this_week = session.run("""
                                 MATCH (sr:ScheduledReceipt)-[:ON_RESOURCE]->(r:Resource {line_name: $line})
                                 MATCH (sr)-[:FOR_ITEM]->(i:Item)
@@ -345,7 +377,6 @@ with col_right:
                             
                             st.info(f"📅 **{this_week['orders']} orders** starting this week (${this_week['revenue']/1e6:.1f}M revenue)")
                             
-                            # Inventory check (this week only)
                             inv_check = session.run("""
                                 MATCH (sr:ScheduledReceipt)-[:ON_RESOURCE]->(r:Resource {line_name: $line})
                                 MATCH (sr)-[:FOR_ITEM]->(i:Item)
@@ -364,7 +395,6 @@ with col_right:
                                 if inv_check['no_stock'] > 0:
                                     st.error(f"🔴 **{inv_check['no_stock']} products** have NO inventory - must produce")
                             
-                            # Must-wins (this week only)
                             mw = session.run("""
                                 MATCH (sr:ScheduledReceipt)-[:ON_RESOURCE]->(r:Resource {line_name: $line})
                                 MATCH (sr)-[:FULFILLS]->(co)-[:FOR_CUSTOMER]->(c:Customer {must_win: true})
@@ -382,7 +412,6 @@ with col_right:
                             else:
                                 st.success("✅ No must-win customers starting this week")
                             
-                            # High-margin (this week only)
                             hm = session.run("""
                                 MATCH (sr:ScheduledReceipt)-[:ON_RESOURCE]->(r:Resource {line_name: $line})
                                 MATCH (sr)-[:FOR_ITEM]->(i:Item)
@@ -398,7 +427,6 @@ with col_right:
                             else:
                                 st.info("Standard margin products this week")
                             
-                            # Alternatives
                             alt = session.run("""
                                 MATCH (sr:ScheduledReceipt)-[:ON_RESOURCE]->(r:Resource {line_name: $line})
                                 WHERE sr.start_date IN $week
@@ -416,7 +444,6 @@ with col_right:
                             else:
                                 st.error("❌ No alternative lines - products are line-specific")
                         
-                        # Summary
                         st.markdown("---")
                         st.markdown("### 📋 Impact Summary")
                         
@@ -434,7 +461,6 @@ with col_right:
                             st.write(f"Revenue: ${this_week['revenue']/1e6:.1f}M")
                             st.write(f"Margin: ${this_week['margin']/1e6:.1f}M")
                         
-                        # Recommendations
                         st.markdown("---")
                         st.markdown("### 💡 Recommended Actions")
                         
