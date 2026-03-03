@@ -40,7 +40,11 @@ if st.session_state.show_intro:
     # Slide 1: Data Overview
     if st.session_state.intro_page == 1:
         st.markdown("## 👋 Welcome to AI Operations Intelligence")
-        st.markdown("*A proof of concept demonstrating AI-enabled insights on live manufacturing data. This capability could evolve into a full Production Control Tower with KPIs, root cause analysis, and Appian workflow integration.*")
+        st.markdown("""
+        <div style='background: #f0f4ff; border-left: 4px solid #3b82f6; padding: 0.75rem 1rem; border-radius: 4px; margin-bottom: 0.75rem;'>
+            <span style='font-size: 1.1rem;'>A proof of concept demonstrating <strong>AI-enabled insights on live manufacturing data</strong>. This capability could evolve into a full Production Control Tower with KPIs, root cause analysis, and Appian workflow integration.</span>
+        </div>
+        """, unsafe_allow_html=True)
         
         col1, col2 = st.columns([1, 1])
         
