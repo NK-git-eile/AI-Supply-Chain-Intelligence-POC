@@ -72,17 +72,17 @@ if st.session_state.show_intro:
             """)
         
         st.markdown("""
-        <div style='background: #e0f2fe; border-left: 4px solid #0284c7; padding: 0.5rem 0.8rem; border-radius: 4px; margin-top: 0.5rem; margin-bottom: 0.5rem;'>
+        <div style='background: #e0f2fe; border-left: 4px solid #0284c7; padding: 0.5rem 0.8rem; border-radius: 4px; margin-top: 0.5rem; margin-bottom: 0.5rem; text-align: center;'>
             💬 <strong>We want your feedback!</strong> This is a proof of concept — use the <strong>Feedback</strong> section in the left sidebar to share your thoughts.
         </div>
         """, unsafe_allow_html=True)
         
-        col_btn1, col_btn2, col_btn3 = st.columns([1, 1, 1])
+        col_btn1, col_btn2, col_btn3, col_btn4, col_btn5 = st.columns([1, 1, 1, 1, 1])
         with col_btn2:
             if st.button("Next: How It Works →", use_container_width=True, type="primary"):
                 st.session_state.intro_page = 2
                 st.rerun()
-        with col_btn3:
+        with col_btn4:
             if st.button("Skip Intro", use_container_width=True):
                 st.session_state.show_intro = False
                 st.rerun()
