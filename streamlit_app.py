@@ -51,51 +51,28 @@ if st.session_state.show_intro:
         with col1:
             st.markdown("""
             ### 📊 Live Berlin Manufacturing Data
-            
             **Data Source:** Blue Yonder Production Plan  
             **Plan Date:** February 28, 2026 (Last Friday)
             
-            **Production Data:**
-            - Production schedules (ScheduledReceipts)
-            - Production resources (Lines & equipment)
-            - Production methods & steps
-            
-            **Master Data:**
-            - Item master (Products)
-            - Customer master (Accounts)
-            - Must-win customer flags
-            
-            **Inventory Data:**
-            - On-hand inventory levels
-            - Quarantine status
-            - Available vs. reserved quantities
+            **Production Data:** Schedules, resources, methods & steps  
+            **Master Data:** Items, customers, must-win flags  
+            **Inventory Data:** On-hand levels, quarantine status, available vs. reserved
             """)
         
         with col2:
             st.markdown("""
             ### ⚠️ Important Notice
+            **Real Data:** ✅ Production schedules, inventory, customer orders, line assignments, production methods
             
-            **Real Data:**
-            - ✅ Production schedules
-            - ✅ Inventory levels
-            - ✅ Customer orders
-            - ✅ Line assignments
-            - ✅ Production methods
-            
-            **Mock Data (Demo Only):**
-            - ⚠️ ASP (Average Selling Price)
-            - ⚠️ COGS (Cost of Goods Sold)
-            - ⚠️ Margin calculations
+            **Mock Data (Demo Only):** ⚠️ ASP, COGS, margin calculations
             
             📌 *"High margin" is defined as margin > 40% (`margin_pct > 0.40`)*
             
             *Financial figures are placeholder values for demonstration purposes.*
             """)
         
-        st.markdown("---")
-        
         st.markdown("""
-        <div style='background: #e0f2fe; border-left: 4px solid #0284c7; padding: 0.75rem 1rem; border-radius: 4px; margin-bottom: 1rem;'>
+        <div style='background: #e0f2fe; border-left: 4px solid #0284c7; padding: 0.5rem 0.8rem; border-radius: 4px; margin-top: 0.5rem; margin-bottom: 0.5rem;'>
             💬 <strong>We want your feedback!</strong> This is a proof of concept — use the <strong>Feedback</strong> section in the left sidebar to share your thoughts.
         </div>
         """, unsafe_allow_html=True)
