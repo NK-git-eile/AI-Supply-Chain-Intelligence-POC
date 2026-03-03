@@ -160,135 +160,117 @@ with col_right:
         selected_line = selected_option.split(" — ")[0]
         
         if st.button("🔧 Simulate 3-Day Downtime", use_container_width=True):
-    with st.spinner("Analyzing line impact..."):
-        with driver.session() as session:
-            
-            # STEP 1: Total impact
-            st.markdown("### 🔍 Analysis Trail")
-            
-            with st.expander("Show detailed analysis steps", expanded=True):
-                st.write("**Step 1:** Identifying all work orders on this line...")
-                
-                total = session.run("""
-                    MATCH (sr:ScheduledReceipt)-[:ON_RESOURCE]->(r:Resource {line_name: $line})
-                    MATCH (sr)-[:FOR_ITEM]->(i:Item {item_type: 'FP'})
-                    RETURN count(sr) AS orders,
-                           count(DISTINCT i) AS products,
-                           sum(sr.quantity) AS units,
-                           sum(sr.quantity * i.asp) AS revenue,
-                           sum(sr.quantity * i.margin) AS margin
-                """, line=selected_line).single()
-                
-                if not total or total['orders'] == 0:
-                    st.error("❌ No finished goods production found on this line")
-                    st.stop()
-                
-                st.success(f"✓ Found {total['orders']} work orders producing {total['products']} different products")
-                
-                # STEP 2: Starting this week
-                st.write("**Step 2:** Checking production timeline...")
-                
-                this_week = session.run("""
-                    MATCH (sr:ScheduledReceipt)-[:ON_RESOURCE]->(r:Resource {line_name: $line})
-                    MATCH (sr)-[:FOR_ITEM]->(i:Item {item_type: 'FP'})
-                    WHERE sr.start_date IN ['1-Mar-26', '2-Mar-26', '3-Mar-26', '4-Mar-26', 
-                                            '5-Mar-26', '6-Mar-26', '7-Mar-26', '8-Mar-26', '9-Mar-26']
-                    RETURN count(sr) AS orders_this_week
-                """, line=selected_line).single()
-                
-                orders_this_week = this_week['orders_this_week'] if this_week else 0
-                st.info(f"📅 {orders_this_week} orders starting production this week")
-                
-                # STEP 3: Inventory check
-                st.write("**Step 3:** Checking inventory availability...")
-                
-                inventory_check = session.run("""
-                    MATCH (sr:ScheduledReceipt)-[:ON_RESOURCE]->(r:Resource {line_name: $line})
-                    MATCH (sr)-[:FOR_ITEM]->(i:Item {item_type: 'FP'})
-                    MATCH (inv:Inventory)-[:FOR_ITEM]->(i)
-                    WHERE NOT inv.is_quarantine
-                    WITH i.code AS product, 
-                         sum(sr.quantity) AS needed,
-                         sum(inv.quantity) AS available
-                    WHERE available >= needed
-                    RETURN count(DISTINCT product) AS products_in_stock,
-                           sum(needed) AS units_can_fulfill
-                """, line=selected_line).single()
-                
-                if inventory_check and inventory_check['products_in_stock'] > 0:
-                    st.success(f"✓ {inventory_check['products_in_stock']} products have sufficient stock to fulfill orders")
-                else:
-                    st.warning("⚠️ Limited inventory available - most orders require production")
-                
-                # STEP 4: Customer impact
-                st.write("**Step 4:** Analyzing customer impact...")
-                
-                customers = session.run("""
-                    MATCH (sr:ScheduledReceipt)-[:ON_RESOURCE]->(r:Resource {line_name: $line})
-                    MATCH (sr)-[:FULFILLS]->(co)-[:FOR_CUSTOMER]->(c)
-                    RETURN count(DISTINCT c) AS total_customers
-                """, line=selected_line).single()
-                
-                st.info(f"👥 {customers['total_customers']} customers affected")
-                
-                # STEP 5: Must-win check
-                st.write("**Step 5:** Checking must-win customer exposure...")
-                
-                mw = session.run("""
-                    MATCH (sr:ScheduledReceipt)-[:ON_RESOURCE]->(r:Resource {line_name: $line})
-                    MATCH (sr)-[:FULFILLS]->(co)-[:FOR_CUSTOMER]->(c:Customer {must_win: true})
-                    MATCH (sr)-[:FOR_ITEM]->(i:Item {item_type: 'FP'})
-                    RETURN count(DISTINCT c) AS mw_customers,
-                           collect(DISTINCT c.customer_number) AS mw_list,
-                           sum(sr.quantity * i.margin) AS mw_margin
-                """, line=selected_line).single()
-                
-                if mw and mw['mw_customers'] > 0:
-                    st.error(f"🔴 CRITICAL: {mw['mw_customers']} must-win customers affected")
-                    st.write(f"   Customer IDs: {', '.join(mw['mw_list'])}")
-                    st.write(f"   Margin at risk: ${mw['mw_margin']/1e3:.0f}K")
-                else:
-                    st.success("✓ No must-win customers impacted")
-                
-                # STEP 6: High-margin analysis
-                st.write("**Step 6:** Identifying high-margin products...")
-                
-                hm = session.run("""
-                    MATCH (sr:ScheduledReceipt)-[:ON_RESOURCE]->(r:Resource {line_name: $line})
-                    MATCH (sr)-[:FOR_ITEM]->(i:Item {item_type: 'FP'})
-                    WHERE i.margin_pct > 0.40
-                    RETURN count(DISTINCT i) AS hm_products,
-                           sum(sr.quantity * i.margin) AS hm_margin
-                """, line=selected_line).single()
-                
-                if hm and hm['hm_products'] > 0:
-                    st.warning(f"💎 {hm['hm_products']} high-margin products (>40%) at risk: ${hm['hm_margin']/1e6:.1f}M margin")
-                else:
-                    st.info("Standard margin products on this line")
-                
-                # STEP 7: Alternative lines
-                st.write("**Step 7:** Searching for alternative qualified lines...")
-                
-                alt_lines = session.run("""
-                    MATCH (sr:ScheduledReceipt)-[:ON_RESOURCE]->(r:Resource {line_name: $line})
-                    WITH collect(DISTINCT sr.item) AS items_on_line
-                    UNWIND items_on_line AS item
-                    MATCH (sr2:ScheduledReceipt {item: item})-[:ON_RESOURCE]->(r2:Resource)
-                    WHERE r2.line_name <> $line
-                    RETURN count(DISTINCT r2.line_name) AS alt_count,
-                           collect(DISTINCT r2.line_name)[0..3] AS alt_lines
-                """, line=selected_line).single()
-                
-                if alt_lines and alt_lines['alt_count'] > 0:
-                    st.success(f"✓ Found {alt_lines['alt_count']} alternative lines")
-                    st.write(f"   Options: {', '.join(alt_lines['alt_lines'])}")
-                else:
-                    st.error("❌ No alternative lines found - products are line-specific")
-            
-            # SUMMARY
-            st.markdown("---")
-            st.markdown("### 📊 Impact Summary")
-            
+            with st.spinner("Analyzing line impact..."):
+                with driver.session() as session:
+                    
+                    # Analysis Trail
+                    with st.expander("🔍 Analysis Trail", expanded=True):
+                        st.write("**Step 1:** Identifying work orders...")
+                        
+                        total = session.run("""
+                            MATCH (sr:ScheduledReceipt)-[:ON_RESOURCE]->(r:Resource {line_name: $line})
+                            MATCH (sr)-[:FOR_ITEM]->(i:Item {item_type: 'FP'})
+                            RETURN count(sr) AS orders,
+                                   count(DISTINCT i) AS products,
+                                   sum(sr.quantity * i.asp) AS revenue,
+                                   sum(sr.quantity * i.margin) AS margin
+                        """, line=selected_line).single()
+                        
+                        if not total or total['orders'] == 0:
+                            st.error("❌ No FG production found")
+                        else:
+                            st.success(f"✓ Found {total['orders']} orders, {total['products']} products")
+                            
+                            st.write("**Step 2:** Checking this week...")
+                            this_week = session.run("""
+                                MATCH (sr:ScheduledReceipt)-[:ON_RESOURCE]->(r:Resource {line_name: $line})
+                                WHERE sr.start_date IN ['1-Mar-26', '2-Mar-26', '3-Mar-26', '4-Mar-26', 
+                                                        '5-Mar-26', '6-Mar-26', '7-Mar-26', '8-Mar-26', '9-Mar-26']
+                                RETURN count(sr) AS count
+                            """, line=selected_line).single()
+                            
+                            st.info(f"📅 {this_week['count']} orders starting this week")
+                            
+                            st.write("**Step 3:** Checking inventory...")
+                            inv_check = session.run("""
+                                MATCH (sr:ScheduledReceipt)-[:ON_RESOURCE]->(r:Resource {line_name: $line})
+                                MATCH (sr)-[:FOR_ITEM]->(i:Item)
+                                OPTIONAL MATCH (inv:Inventory)-[:FOR_ITEM]->(i)
+                                WHERE NOT inv.is_quarantine
+                                WITH count(DISTINCT CASE WHEN inv.quantity > 0 THEN i.code END) AS in_stock
+                                RETURN in_stock
+                            """, line=selected_line).single()
+                            
+                            if inv_check['in_stock'] > 0:
+                                st.success(f"✓ {inv_check['in_stock']} products have stock")
+                            else:
+                                st.warning("⚠️ Limited inventory")
+                            
+                            st.write("**Step 4:** Checking must-wins...")
+                            mw = session.run("""
+                                MATCH (sr:ScheduledReceipt)-[:ON_RESOURCE]->(r:Resource {line_name: $line})
+                                MATCH (sr)-[:FULFILLS]->(co)-[:FOR_CUSTOMER]->(c:Customer {must_win: true})
+                                MATCH (sr)-[:FOR_ITEM]->(i:Item {item_type: 'FP'})
+                                RETURN count(DISTINCT c) AS count,
+                                       collect(DISTINCT c.customer_number)[0..3] AS ids,
+                                       sum(sr.quantity * i.margin) AS margin
+                            """, line=selected_line).single()
+                            
+                            if mw and mw['count'] > 0:
+                                st.error(f"🔴 {mw['count']} must-wins: {', '.join(mw['ids'])}")
+                            else:
+                                st.success("✓ No must-wins affected")
+                            
+                            st.write("**Step 5:** Analyzing margins...")
+                            hm = session.run("""
+                                MATCH (sr:ScheduledReceipt)-[:ON_RESOURCE]->(r:Resource {line_name: $line})
+                                MATCH (sr)-[:FOR_ITEM]->(i:Item {item_type: 'FP'})
+                                WHERE i.margin_pct > 0.40
+                                RETURN count(DISTINCT i) AS products,
+                                       sum(sr.quantity * i.margin) AS margin
+                            """, line=selected_line).single()
+                            
+                            if hm and hm['products'] > 0:
+                                st.warning(f"💎 {hm['products']} high-margin products: ${hm['margin']/1e6:.1f}M")
+                            
+                            st.write("**Step 6:** Searching alternatives...")
+                            alt = session.run("""
+                                MATCH (sr:ScheduledReceipt)-[:ON_RESOURCE]->(r:Resource {line_name: $line})
+                                WITH collect(DISTINCT sr.item) AS items
+                                UNWIND items AS item
+                                MATCH (sr2:ScheduledReceipt {item: item})-[:ON_RESOURCE]->(r2:Resource)
+                                WHERE r2.line_name <> $line
+                                RETURN count(DISTINCT r2.line_name) AS count
+                            """, line=selected_line).single()
+                            
+                            if alt and alt['count'] > 0:
+                                st.success(f"✓ {alt['count']} alternative lines found")
+                            else:
+                                st.error("❌ No alternatives - line-specific")
+                    
+                    # Summary
+                    st.markdown("**Impact Summary:**")
+                    c1, c2, c3 = st.columns(3)
+                    c1.metric("Orders", total['orders'])
+                    c2.metric("Revenue", f"${total['revenue']/1e6:.1f}M")
+                    c3.metric("Margin", f"${total['margin']/1e6:.1f}M")
+                    
+                    # Recommendations
+                    st.markdown("**💡 Actions:**")
+                    recs = []
+                    if mw and mw['count'] > 0:
+                        recs.append(f"1. 🔴 Protect must-wins: {', '.join(mw['ids'])}")
+                    if hm and hm['products'] > 0:
+                        recs.append(f"2. 💎 Prioritize high-margin (${hm['margin']/1e6:.1f}M)")
+                    if inv_check['in_stock'] > 0:
+                        recs.append(f"3. ✅ Ship {inv_check['in_stock']} from stock")
+                    if alt and alt['count'] > 0:
+                        recs.append(f"4. 🔧 Consider {alt['count']} alternative lines")
+                    else:
+                        recs.append("4. ⚠️ Must repair - no alternatives")
+                    
+                    for rec in recs:
+                        st.write(rec)            
             c1, c2, c3 = st.columns(3)
             c1.metric("Work Orders", f"{total['orders']}")
             c2.metric("Revenue at Risk", f"${total['revenue']/1e6:.1f}M")
