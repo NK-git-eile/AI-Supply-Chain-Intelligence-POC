@@ -99,7 +99,7 @@ col_left, col_right = st.columns(2)
 
 with col_left:
     st.subheader("💬 Ask Questions")
-    question = st.text_area("", height=100, placeholder="What is the highest margin WO starting on line 5 this week?", label_visibility="collapsed")
+    question = st.text_area("", height=100, placeholder="Which work orders on line 5 this week have no inventory?", label_visibility="collapsed")
     
     col_btn1, col_btn2 = st.columns([1, 1])
     with col_btn1:
@@ -120,13 +120,15 @@ CRITICAL DATABASE FACTS:
 1. Dates are STRINGS in format 'D-MMM-YY' (e.g., '1-Mar-26', '15-Apr-26')
 2. NEVER use date() functions - they don't work with string dates
 3. Line names must be EXACT matches from the list below
+4. "orders" or "work orders" = ScheduledReceipts (production jobs)
+5. ScheduledReceipts don't have a single WO number - identify by item + start_date + quantity
 
 SCHEMA:
 
 Nodes:
-- ScheduledReceipt: item (string), start_date (string), sched_date (string), quantity (float)
-- Resource: line_name (string), code (string), site (string)
-- Item: code (string), item_type (string: 'FP' or 'SFP'), asp (float), margin (float), margin_pct (float)
+- ScheduledReceipt: item (string), site (string), start_date (string), sched_date (string), quantity (float), line (string - production method)
+- Resource: line_name (string - physical line), code (string), site (string)
+- Item: code (string), item_type (string: 'FP' or 'SFP'), asp (float), margin (float), margin_pct (float), description (string)
 - Customer: customer_number (string), must_win (boolean), country (string)
 - Inventory: quantity (float), is_quarantine (boolean)
 
@@ -136,7 +138,7 @@ Relationships:
 - (ScheduledReceipt)-[:FULFILLS]->(CustomerOrder)-[:FOR_CUSTOMER]->(Customer)
 - (Inventory)-[:FOR_ITEM]->(Item)
 
-ACTUAL LINE NAMES (use these exact strings):
+ACTUAL RESOURCE LINE NAMES (physical lines - use exact strings):
 - 'TFS 80/2 (Linie 5 NEU)'
 - 'LINIE 9'
 - 'Linie 11 EDO-Konfektion. II'
@@ -150,13 +152,41 @@ ACTUAL LINE NAMES (use these exact strings):
 THIS WEEK DATES (March 1-9, 2026):
 ['1-Mar-26', '2-Mar-26', '3-Mar-26', '4-Mar-26', '5-Mar-26', '6-Mar-26', '7-Mar-26', '8-Mar-26', '9-Mar-26']
 
+WORK ORDER IDENTIFICATION:
+- Always return these fields to identify a work order: sr.item, sr.start_date, sr.quantity
+- Optionally include: sr.sched_date, sr.site, i.description
+- Do NOT expand to customer orders unless specifically asked
+- One ScheduledReceipt can fulfill multiple CustomerOrders - don't join unless needed
+
 EXAMPLE QUERIES:
 
-Question: "How many orders start on Line 5 this week?"
+Question: "List work orders starting on Line 5 this week"
 Query:
 MATCH (sr:ScheduledReceipt)-[:ON_RESOURCE]->(r:Resource {{line_name: 'TFS 80/2 (Linie 5 NEU)'}})
+MATCH (sr)-[:FOR_ITEM]->(i:Item)
 WHERE sr.start_date IN ['1-Mar-26', '2-Mar-26', '3-Mar-26', '4-Mar-26', '5-Mar-26', '6-Mar-26', '7-Mar-26', '8-Mar-26', '9-Mar-26']
-RETURN count(sr) AS orders_this_week
+RETURN sr.item AS item,
+       i.description AS product_name,
+       sr.start_date AS start_date,
+       sr.sched_date AS completion_date,
+       sr.quantity AS quantity
+ORDER BY sr.start_date
+LIMIT 100
+
+Question: "Which work orders have no available inventory?"
+Query:
+MATCH (sr:ScheduledReceipt)-[:FOR_ITEM]->(i:Item {{item_type: 'FP'}})
+OPTIONAL MATCH (inv:Inventory)-[:FOR_ITEM]->(i)
+WHERE NOT inv.is_quarantine
+WITH sr, i, sum(COALESCE(inv.quantity, 0)) AS available_inventory
+WHERE available_inventory = 0
+RETURN sr.item AS item,
+       i.description AS product_name,
+       sr.start_date AS start_date,
+       sr.quantity AS quantity,
+       available_inventory
+ORDER BY sr.start_date
+LIMIT 100
 
 Question: "Which lines make high-margin products?"
 Query:
@@ -194,9 +224,11 @@ NOW ANSWER THIS QUESTION: {question}
 
 RULES:
 - Return ONLY the Cypher query
-- Use exact line names from the list above
+- Use exact line names from Resource list above
 - For dates, use IN clause with string list
 - Filter to item_type: 'FP' for finished goods
+- Always include sr.item, sr.start_date, sr.quantity to identify work orders
+- Don't join to CustomerOrders unless the question specifically asks about customers
 - Add LIMIT 100 at the end
 - No markdown formatting, just the query
 
@@ -245,7 +277,6 @@ with col_right:
             with st.spinner("Analyzing..."):
                 with driver.session() as session:
                     
-                    # Get total impact first
                     total = session.run("""
                         MATCH (sr:ScheduledReceipt)-[:ON_RESOURCE]->(r:Resource {line_name: $line})
                         MATCH (sr)-[:FOR_ITEM]->(i:Item {item_type: 'FP'})
@@ -258,7 +289,6 @@ with col_right:
                     if not total or total['orders'] == 0:
                         st.error("❌ No FG production found")
                     else:
-                        # Analysis Trail
                         with st.expander("🔍 Analysis Trail", expanded=True):
                             st.write("**Step 1:** Identifying work orders...")
                             st.success(f"✓ Found {total['orders']} orders, {total['products']} products")
@@ -329,14 +359,12 @@ with col_right:
                             else:
                                 st.error("❌ No alternatives")
                         
-                        # Summary
                         st.markdown("**Impact Summary:**")
                         c1, c2, c3 = st.columns(3)
                         c1.metric("Orders", total['orders'])
                         c2.metric("Revenue", f"${total['revenue']/1e6:.1f}M")
                         c3.metric("Margin", f"${total['margin']/1e6:.1f}M")
                         
-                        # Recommendations
                         st.markdown("**💡 Recommended Actions:**")
                         recs = []
                         if mw and mw['count'] > 0:
