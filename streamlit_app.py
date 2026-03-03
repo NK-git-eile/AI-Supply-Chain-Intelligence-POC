@@ -259,11 +259,12 @@ with st.sidebar:
     # Feedback Form
     st.subheader("💬 Feedback")
     st.markdown("*Your input helps us improve this tool!*")
-    feedback = st.text_area("Share your thoughts:", height=100, key="feedback_text", placeholder="What works well? What could be better?")
+    if 'feedback_key' not in st.session_state:
+        st.session_state.feedback_key = 0
+    feedback = st.text_area("Share your thoughts:", height=100, key=f"feedback_text_{st.session_state.feedback_key}", placeholder="What works well? What could be better?")
     
     if st.button("Submit Feedback", use_container_width=True):
         if feedback:
-            # Save to session state (Streamlit Cloud compatible)
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             
             if 'all_feedback' not in st.session_state:
@@ -274,7 +275,25 @@ with st.sidebar:
                 'feedback': feedback
             })
             
+            # Save to Neo4j for persistent storage
+            try:
+                if neo4j_uri and neo4j_password:
+                    fb_driver = GraphDatabase.driver(neo4j_uri, auth=("neo4j", neo4j_password))
+                    with fb_driver.session() as fb_session:
+                        fb_session.run("""
+                            CREATE (f:Feedback {
+                                text: $text,
+                                timestamp: $timestamp,
+                                source: 'streamlit_app'
+                            })
+                        """, text=feedback, timestamp=timestamp)
+                    fb_driver.close()
+            except Exception:
+                pass  # Don't block the user if Neo4j write fails
+            
+            st.session_state.feedback_key += 1
             st.success("✅ Thank you! Feedback submitted.")
+            st.rerun()
             
             # Show recent feedback
             if len(st.session_state.all_feedback) > 0:
@@ -424,6 +443,135 @@ with col_left:
         ]
     }
     
+    # Pre-built Cypher queries for dropdown questions (skip AI entirely)
+    PREBUILT_QUERIES = {
+        "Which high-margin products are starting on Line 5 this week?": """
+            MATCH (sr:ScheduledReceipt)-[:ON_RESOURCE]->(r:Resource {line_name: 'TFS 80/2 (Linie 5 NEU)'})
+            MATCH (sr)-[:FOR_ITEM]->(i:Item)
+            WHERE sr.start_date IN ['2-Mar-26', '3-Mar-26', '4-Mar-26', '5-Mar-26', '6-Mar-26', '7-Mar-26', '8-Mar-26']
+              AND i.item_type IN ['FP', 'SFP'] AND i.margin_pct > 0.40
+            RETURN sr.item, i.description, sr.start_date, sr.quantity, i.margin_pct, i.margin,
+                   round(sr.quantity * i.margin) AS total_margin
+            ORDER BY i.margin_pct DESC
+            LIMIT 100""",
+        
+        "Show me the highest margin work order starting on Line 5 this week": """
+            MATCH (sr:ScheduledReceipt)-[:ON_RESOURCE]->(r:Resource {line_name: 'TFS 80/2 (Linie 5 NEU)'})
+            MATCH (sr)-[:FOR_ITEM]->(i:Item)
+            WHERE sr.start_date IN ['2-Mar-26', '3-Mar-26', '4-Mar-26', '5-Mar-26', '6-Mar-26', '7-Mar-26', '8-Mar-26']
+              AND i.item_type IN ['FP', 'SFP']
+            RETURN sr.item, i.description, sr.start_date, sr.quantity, i.margin_pct, i.margin,
+                   round(sr.quantity * i.margin) AS total_margin
+            ORDER BY sr.quantity * i.margin DESC
+            LIMIT 1""",
+        
+        "What is the total revenue scheduled on Line 5 this week?": """
+            MATCH (sr:ScheduledReceipt)-[:ON_RESOURCE]->(r:Resource {line_name: 'TFS 80/2 (Linie 5 NEU)'})
+            MATCH (sr)-[:FOR_ITEM]->(i:Item)
+            WHERE sr.start_date IN ['2-Mar-26', '3-Mar-26', '4-Mar-26', '5-Mar-26', '6-Mar-26', '7-Mar-26', '8-Mar-26']
+              AND i.item_type IN ['FP', 'SFP']
+            RETURN sum(sr.quantity * i.asp) AS total_revenue, count(sr) AS work_orders, count(DISTINCT i) AS products
+            LIMIT 100""",
+        
+        "Which customer orders depend on Line 5 production this week?": """
+            MATCH (sr:ScheduledReceipt)-[:ON_RESOURCE]->(r:Resource {line_name: 'TFS 80/2 (Linie 5 NEU)'})
+            MATCH (sr)-[:FOR_ITEM]->(i:Item)
+            MATCH (sr)-[:FULFILLS]->(co)-[:FOR_CUSTOMER]->(c:Customer)
+            WHERE sr.start_date IN ['2-Mar-26', '3-Mar-26', '4-Mar-26', '5-Mar-26', '6-Mar-26', '7-Mar-26', '8-Mar-26']
+              AND i.item_type IN ['FP', 'SFP']
+            RETURN c.customer_number, c.must_win, sr.item, i.description, sr.start_date, sr.quantity,
+                   round(sr.quantity * i.asp) AS revenue
+            ORDER BY c.must_win DESC, revenue DESC
+            LIMIT 100""",
+        
+        "Are any must-win customers affected by Line 5 this week?": """
+            MATCH (sr:ScheduledReceipt)-[:ON_RESOURCE]->(r:Resource {line_name: 'TFS 80/2 (Linie 5 NEU)'})
+            MATCH (sr)-[:FOR_ITEM]->(i:Item)
+            MATCH (sr)-[:FULFILLS]->(co)-[:FOR_CUSTOMER]->(c:Customer {must_win: true})
+            WHERE sr.start_date IN ['2-Mar-26', '3-Mar-26', '4-Mar-26', '5-Mar-26', '6-Mar-26', '7-Mar-26', '8-Mar-26']
+              AND i.item_type IN ['FP', 'SFP']
+            RETURN c.customer_number, sr.item, i.description, sr.start_date, sr.quantity,
+                   round(sr.quantity * i.asp) AS revenue, round(sr.quantity * i.margin) AS margin
+            ORDER BY revenue DESC
+            LIMIT 100""",
+        
+        "Show all must-win customer orders": """
+            MATCH (sr:ScheduledReceipt)-[:FULFILLS]->(co)-[:FOR_CUSTOMER]->(c:Customer {must_win: true})
+            MATCH (sr)-[:FOR_ITEM]->(i:Item)
+            WHERE i.item_type IN ['FP', 'SFP']
+            RETURN c.customer_number, sr.item, i.description, sr.start_date, sr.quantity,
+                   round(sr.quantity * i.asp) AS revenue
+            ORDER BY revenue DESC
+            LIMIT 100""",
+        
+        "If Line 5 goes down Thursday and Friday, what revenue is at risk?": """
+            MATCH (sr:ScheduledReceipt)-[:ON_RESOURCE]->(r:Resource {line_name: 'TFS 80/2 (Linie 5 NEU)'})
+            MATCH (sr)-[:FOR_ITEM]->(i:Item)
+            WHERE sr.start_date IN ['5-Mar-26', '6-Mar-26'] AND i.item_type IN ['FP', 'SFP']
+            RETURN sr.item, i.description, sr.start_date, sr.quantity,
+                   round(sr.quantity * i.asp) AS revenue, round(sr.quantity * i.margin) AS margin
+            ORDER BY revenue DESC
+            LIMIT 100""",
+        
+        "If Line 5 goes down for 3 days, what is the impact?": """
+            MATCH (sr:ScheduledReceipt)-[:ON_RESOURCE]->(r:Resource {line_name: 'TFS 80/2 (Linie 5 NEU)'})
+            MATCH (sr)-[:FOR_ITEM]->(i:Item)
+            WHERE sr.start_date IN ['3-Mar-26', '4-Mar-26', '5-Mar-26'] AND i.item_type IN ['FP', 'SFP']
+            RETURN sr.item, i.description, sr.start_date, sr.quantity,
+                   round(sr.quantity * i.asp) AS revenue, round(sr.quantity * i.margin) AS margin,
+                   i.margin_pct
+            ORDER BY revenue DESC
+            LIMIT 100""",
+        
+        "What happens if item 01742BAL cannot run on Line 5 this week?": """
+            MATCH (sr:ScheduledReceipt {item: '01742BAL'})-[:ON_RESOURCE]->(r:Resource {line_name: 'TFS 80/2 (Linie 5 NEU)'})
+            MATCH (sr)-[:FOR_ITEM]->(i:Item)
+            WHERE sr.start_date IN ['2-Mar-26', '3-Mar-26', '4-Mar-26', '5-Mar-26', '6-Mar-26', '7-Mar-26', '8-Mar-26']
+            OPTIONAL MATCH (sr2:ScheduledReceipt {item: '01742BAL'})-[:ON_RESOURCE]->(r2:Resource)
+            WHERE r2.line_name <> 'TFS 80/2 (Linie 5 NEU)'
+            RETURN sr.item, i.description, sr.start_date, sr.quantity,
+                   round(sr.quantity * i.asp) AS revenue_at_risk,
+                   collect(DISTINCT r2.line_name) AS alternative_lines
+            LIMIT 100""",
+        
+        "Which other lines can make the products scheduled on Line 5 this week?": """
+            MATCH (sr:ScheduledReceipt)-[:ON_RESOURCE]->(r:Resource {line_name: 'TFS 80/2 (Linie 5 NEU)'})
+            WHERE sr.start_date IN ['2-Mar-26', '3-Mar-26', '4-Mar-26', '5-Mar-26', '6-Mar-26', '7-Mar-26', '8-Mar-26']
+            WITH collect(DISTINCT sr.item) AS items
+            UNWIND items AS item
+            MATCH (sr2:ScheduledReceipt {item: item})-[:ON_RESOURCE]->(r2:Resource)
+            WHERE r2.line_name <> 'TFS 80/2 (Linie 5 NEU)'
+            RETURN item, collect(DISTINCT r2.line_name) AS alternative_lines
+            LIMIT 100""",
+        
+        "How many work orders start on Line 5 this week?": """
+            MATCH (sr:ScheduledReceipt)-[:ON_RESOURCE]->(r:Resource {line_name: 'TFS 80/2 (Linie 5 NEU)'})
+            MATCH (sr)-[:FOR_ITEM]->(i:Item)
+            WHERE sr.start_date IN ['2-Mar-26', '3-Mar-26', '4-Mar-26', '5-Mar-26', '6-Mar-26', '7-Mar-26', '8-Mar-26']
+              AND i.item_type IN ['FP', 'SFP']
+            RETURN count(sr) AS work_orders_count
+            LIMIT 100""",
+        
+        "Which production line has the most revenue this week?": """
+            MATCH (sr:ScheduledReceipt)-[:ON_RESOURCE]->(r:Resource)
+            MATCH (sr)-[:FOR_ITEM]->(i:Item)
+            WHERE sr.start_date IN ['2-Mar-26', '3-Mar-26', '4-Mar-26', '5-Mar-26', '6-Mar-26', '7-Mar-26', '8-Mar-26']
+              AND i.item_type IN ['FP', 'SFP']
+            RETURN r.line_name, count(sr) AS work_orders, sum(sr.quantity * i.asp) AS total_revenue
+            ORDER BY total_revenue DESC
+            LIMIT 100""",
+        
+        "List all work orders starting on Line 5 this week": """
+            MATCH (sr:ScheduledReceipt)-[:ON_RESOURCE]->(r:Resource {line_name: 'TFS 80/2 (Linie 5 NEU)'})
+            MATCH (sr)-[:FOR_ITEM]->(i:Item)
+            WHERE sr.start_date IN ['2-Mar-26', '3-Mar-26', '4-Mar-26', '5-Mar-26', '6-Mar-26', '7-Mar-26', '8-Mar-26']
+              AND i.item_type IN ['FP', 'SFP']
+            RETURN sr.item, i.description, sr.start_date, sr.sched_date, sr.quantity, i.item_type,
+                   round(sr.quantity * i.asp) AS revenue
+            ORDER BY sr.start_date, sr.item
+            LIMIT 100""",
+    }
+    
     # Category buttons
     col_cat1, col_cat2 = st.columns(2)
     categories = list(question_categories.keys())
@@ -517,10 +665,18 @@ with col_left:
         with st.spinner("Analyzing..."):
             try:
                 client = anthropic.Anthropic(api_key=claude_key)
-                response = client.messages.create(
-                    model="claude-sonnet-4-20250514",
-                    max_tokens=1200,
-                    messages=[{"role": "user", "content": f"""You are a Neo4j Cypher query expert. Write a query to answer this question.
+                
+                # Check for pre-built query first (instant, no AI call needed)
+                prebuilt = PREBUILT_QUERIES.get(question.strip())
+                
+                if prebuilt:
+                    query = prebuilt.strip()
+                else:
+                    # Free-form question: use Haiku for fast query generation
+                    response = client.messages.create(
+                        model="claude-haiku-4-5-20251001",
+                        max_tokens=1200,
+                        messages=[{"role": "user", "content": f"""You are a Neo4j Cypher query expert. Write a query to answer this question.
 
 CRITICAL DATABASE FACTS:
 1. Dates are STRINGS in format 'D-MMM-YY' (e.g., '1-Mar-26', '15-Apr-26')
@@ -597,72 +753,70 @@ RULES:
 - No markdown formatting, just the query
 
 Query:"""}]
-                )
+                    )
+                    
+                    query = response.content[0].text.strip()
+                    if '```' in query:
+                        query = query.split('```')[1].replace('cypher','').strip()
+                    
+                    # ----- VALIDATION: Check for casual line names that slipped through -----
+                    casual_to_exact = {
+                        "'Line 1'": "'BOSCH 1 (Linie 1)'",
+                        "'Line 4'": "'TFS 20 (Linie 4)'",
+                        "'Line 5'": "'TFS 80/2 (Linie 5 NEU)'",
+                        "'Line 6'": "'Linie 6 EDO-Konfektion. I'",
+                        "'Line 9'": "'LINIE 9'",
+                        "'Line 11'": "'Linie 11 EDO-Konfektion. II'",
+                        '"Line 1"': "'BOSCH 1 (Linie 1)'",
+                        '"Line 4"': "'TFS 20 (Linie 4)'",
+                        '"Line 5"': "'TFS 80/2 (Linie 5 NEU)'",
+                        '"Line 6"': "'Linie 6 EDO-Konfektion. I'",
+                        '"Line 9"': "'LINIE 9'",
+                        '"Line 11"': "'Linie 11 EDO-Konfektion. II'",
+                        "'Linie 5'": "'TFS 80/2 (Linie 5 NEU)'",
+                        "'Linie 1'": "'BOSCH 1 (Linie 1)'",
+                        "'Linie 4'": "'TFS 20 (Linie 4)'",
+                        "'Linie 6'": "'Linie 6 EDO-Konfektion. I'",
+                        "'Linie 9'": "'LINIE 9'",
+                        "'Linie 11'": "'Linie 11 EDO-Konfektion. II'",
+                        '"Linie 5"': "'TFS 80/2 (Linie 5 NEU)'",
+                        '"Linie 1"': "'BOSCH 1 (Linie 1)'",
+                        '"Linie 4"': "'TFS 20 (Linie 4)'",
+                        '"Linie 6"': "'Linie 6 EDO-Konfektion. I'",
+                        '"Linie 9"': "'LINIE 9'",
+                        '"Linie 11"': "'Linie 11 EDO-Konfektion. II'",
+                        "line_name: 'Line 5'": "line_name: 'TFS 80/2 (Linie 5 NEU)'",
+                        "line_name: 'Line 1'": "line_name: 'BOSCH 1 (Linie 1)'",
+                        "line_name: 'Line 4'": "line_name: 'TFS 20 (Linie 4)'",
+                        "line_name: 'Line 6'": "line_name: 'Linie 6 EDO-Konfektion. I'",
+                        "line_name: 'Line 9'": "line_name: 'LINIE 9'",
+                        "line_name: 'Line 11'": "line_name: 'Linie 11 EDO-Konfektion. II'",
+                        "CONTAINS 'Line 5'": "= 'TFS 80/2 (Linie 5 NEU)'",
+                        "CONTAINS 'Line 1'": "= 'BOSCH 1 (Linie 1)'",
+                        "CONTAINS 'Line 4'": "= 'TFS 20 (Linie 4)'",
+                        "CONTAINS 'Line 9'": "= 'LINIE 9'",
+                        "CONTAINS 'Line 11'": "= 'Linie 11 EDO-Konfektion. II'",
+                        "CONTAINS 'Line 6'": "= 'Linie 6 EDO-Konfektion. I'",
+                        "CONTAINS '5'": "= 'TFS 80/2 (Linie 5 NEU)'",
+                    }
+                    
+                    for casual, exact in casual_to_exact.items():
+                        if casual in query:
+                            query = query.replace(casual, exact)
+                    
+                    # ----- VALIDATION: Fix margin_pct integer values -----
+                    import re
+                    margin_pattern = re.compile(r'margin_pct\s*([><=!]+)\s*(\d+)(?!\.\d)')
+                    def fix_margin(match):
+                        operator = match.group(1)
+                        value = int(match.group(2))
+                        if value > 1:
+                            return f'margin_pct {operator} {value / 100}'
+                        return match.group(0)
+                    query = margin_pattern.sub(fix_margin, query)
+                    # ----- END VALIDATION -----
                 
-                query = response.content[0].text.strip()
-                if '```' in query:
-                    query = query.split('```')[1].replace('cypher','').strip()
-                
-                # ----- VALIDATION: Check for casual line names that slipped through -----
-                casual_to_exact = {
-                    "'Line 1'": "'BOSCH 1 (Linie 1)'",
-                    "'Line 4'": "'TFS 20 (Linie 4)'",
-                    "'Line 5'": "'TFS 80/2 (Linie 5 NEU)'",
-                    "'Line 6'": "'Linie 6 EDO-Konfektion. I'",
-                    "'Line 9'": "'LINIE 9'",
-                    "'Line 11'": "'Linie 11 EDO-Konfektion. II'",
-                    '"Line 1"': "'BOSCH 1 (Linie 1)'",
-                    '"Line 4"': "'TFS 20 (Linie 4)'",
-                    '"Line 5"': "'TFS 80/2 (Linie 5 NEU)'",
-                    '"Line 6"': "'Linie 6 EDO-Konfektion. I'",
-                    '"Line 9"': "'LINIE 9'",
-                    '"Line 11"': "'Linie 11 EDO-Konfektion. II'",
-                    "'Linie 5'": "'TFS 80/2 (Linie 5 NEU)'",
-                    "'Linie 1'": "'BOSCH 1 (Linie 1)'",
-                    "'Linie 4'": "'TFS 20 (Linie 4)'",
-                    "'Linie 6'": "'Linie 6 EDO-Konfektion. I'",
-                    "'Linie 9'": "'LINIE 9'",
-                    "'Linie 11'": "'Linie 11 EDO-Konfektion. II'",
-                    '"Linie 5"': "'TFS 80/2 (Linie 5 NEU)'",
-                    '"Linie 1"': "'BOSCH 1 (Linie 1)'",
-                    '"Linie 4"': "'TFS 20 (Linie 4)'",
-                    '"Linie 6"': "'Linie 6 EDO-Konfektion. I'",
-                    '"Linie 9"': "'LINIE 9'",
-                    '"Linie 11"': "'Linie 11 EDO-Konfektion. II'",
-                    # Also catch line_name: 'Line X' patterns
-                    "line_name: 'Line 5'": "line_name: 'TFS 80/2 (Linie 5 NEU)'",
-                    "line_name: 'Line 1'": "line_name: 'BOSCH 1 (Linie 1)'",
-                    "line_name: 'Line 4'": "line_name: 'TFS 20 (Linie 4)'",
-                    "line_name: 'Line 6'": "line_name: 'Linie 6 EDO-Konfektion. I'",
-                    "line_name: 'Line 9'": "line_name: 'LINIE 9'",
-                    "line_name: 'Line 11'": "line_name: 'Linie 11 EDO-Konfektion. II'",
-                    # CONTAINS patterns
-                    "CONTAINS 'Line 5'": "= 'TFS 80/2 (Linie 5 NEU)'",
-                    "CONTAINS 'Line 1'": "= 'BOSCH 1 (Linie 1)'",
-                    "CONTAINS 'Line 4'": "= 'TFS 20 (Linie 4)'",
-                    "CONTAINS 'Line 9'": "= 'LINIE 9'",
-                    "CONTAINS 'Line 11'": "= 'Linie 11 EDO-Konfektion. II'",
-                    "CONTAINS 'Line 6'": "= 'Linie 6 EDO-Konfektion. I'",
-                    "CONTAINS '5'": "= 'TFS 80/2 (Linie 5 NEU)'",
-                }
-                
-                for casual, exact in casual_to_exact.items():
-                    if casual in query:
-                        query = query.replace(casual, exact)
-                
-                # ----- VALIDATION: Fix margin_pct integer values -----
-                # Catch cases where AI writes margin_pct > 40 instead of > 0.40
-                import re
-                margin_pattern = re.compile(r'margin_pct\s*([><=!]+)\s*(\d+)(?!\.\d)')
-                def fix_margin(match):
-                    operator = match.group(1)
-                    value = int(match.group(2))
-                    if value > 1:  # It's an integer percentage, convert to decimal
-                        return f'margin_pct {operator} {value / 100}'
-                    return match.group(0)
-                query = margin_pattern.sub(fix_margin, query)
-                # ----- END VALIDATION -----
-                
+                # --- From here, runs for both prebuilt and free-form queries ---
                 if show_query:
                     st.session_state.ai_result_query = query
                 
@@ -672,10 +826,10 @@ Query:"""}]
                 if data:
                     st.session_state.ai_result_data = pd.DataFrame(data)
                     
-                    # AI interpretation of results
+                    # AI interpretation of results (Haiku for speed)
                     with st.spinner("Interpreting results..."):
                         interpret_response = client.messages.create(
-                            model="claude-sonnet-4-20250514",
+                            model="claude-haiku-4-5-20251001",
                             max_tokens=250,
                             messages=[{"role": "user", "content": f"""The user asked: "{question}"
 
@@ -705,7 +859,7 @@ Summary:"""}]
                     
                 else:
                     interpret_response = client.messages.create(
-                        model="claude-sonnet-4-20250514",
+                        model="claude-haiku-4-5-20251001",
                         max_tokens=150,
                         messages=[{"role": "user", "content": f"""The user asked: "{question}"
 
