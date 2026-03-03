@@ -101,7 +101,7 @@ col_left, col_right = st.columns(2)
 
 with col_left:
     st.subheader("💬 Ask Questions")
-    question = st.text_area("", height=100, placeholder="Which work orders on line 5 this week have no inventory?", label_visibility="collapsed")
+    question = st.text_area("", height=100, placeholder="Which customer orders depend on Line 5 production this week?", label_visibility="collapsed")
     
     col_btn1, col_btn2 = st.columns([1, 1])
     with col_btn1:
@@ -257,7 +257,30 @@ Query:"""}]
                     st.success(f"✓ {len(data)} results")
                     st.dataframe(pd.DataFrame(data), use_container_width=True, height=300)
                 else:
-                    st.info("No results")
+                    # Smart interpretation of empty results
+                    interpret_response = client.messages.create(
+                        model="claude-sonnet-4-20250514",
+                        max_tokens=150,
+                        messages=[{"role": "user", "content": f"""The user asked: "{question}"
+
+The database query returned no results (0 rows).
+
+Provide a clear, direct answer to the user's question based on this empty result.
+
+Be concise and helpful. Use natural language. Examples:
+- "No must-win customers are affected by Line 5 this week"
+- "All products starting this week have available inventory"
+- "No alternative lines found - products are line-specific"
+- "Line 5 has no work orders scheduled this week"
+
+Keep it to 1-2 sentences maximum. Be positive when appropriate.
+
+Answer:"""}]
+                    )
+                    
+                    answer = interpret_response.content[0].text.strip()
+                    st.success(f"✅ {answer}")
+                    
             except Exception as e:
                 st.error(f"Error: {e}")
 
