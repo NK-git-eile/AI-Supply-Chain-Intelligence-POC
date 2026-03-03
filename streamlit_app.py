@@ -49,32 +49,34 @@ if not all([neo4j_uri, neo4j_password]):
 
 driver = GraphDatabase.driver(neo4j_uri, auth=(neo4j_user, neo4j_password))
 
+# This week dates (March 2-8, 2026 - Calendar week Mon-Sun)
+THIS_WEEK = ['2-Mar-26', '3-Mar-26', '4-Mar-26', '5-Mar-26', '6-Mar-26', '7-Mar-26', '8-Mar-26']
+
 # KPIs
 with driver.session() as session:
     starting = session.run("""
-        MATCH (sr:ScheduledReceipt)-[:FOR_ITEM]->(i:Item {item_type: 'FP'})
-        WHERE sr.start_date IN ['1-Mar-26', '2-Mar-26', '3-Mar-26', '4-Mar-26', 
-                                '5-Mar-26', '6-Mar-26', '7-Mar-26', '8-Mar-26', '9-Mar-26']
+        MATCH (sr:ScheduledReceipt)-[:FOR_ITEM]->(i:Item)
+        WHERE sr.start_date IN $week AND i.item_type IN ['FP', 'SFP']
         RETURN sum(sr.quantity * i.asp) AS revenue, count(DISTINCT sr) AS orders
-    """).single()
+    """, week=THIS_WEEK).single()
     
     must_win = session.run("""
         MATCH (sr:ScheduledReceipt)-[:FULFILLS]->(co)-[:FOR_CUSTOMER]->(c:Customer {must_win: true})
-        MATCH (sr)-[:FOR_ITEM]->(i:Item {item_type: 'FP'})
-        WHERE sr.start_date IN ['1-Mar-26', '2-Mar-26', '3-Mar-26', '4-Mar-26', 
-                                '5-Mar-26', '6-Mar-26', '7-Mar-26', '8-Mar-26', '9-Mar-26']
+        MATCH (sr)-[:FOR_ITEM]->(i:Item)
+        WHERE sr.start_date IN $week AND i.item_type IN ['FP', 'SFP']
         RETURN sum(sr.quantity * i.asp) AS value, count(DISTINCT c) AS customers
-    """).single()
+    """, week=THIS_WEEK).single()
     
     high_margin = session.run("""
-        MATCH (sr:ScheduledReceipt)-[:FOR_ITEM]->(i:Item {item_type: 'FP'})
-        WHERE i.margin_pct > 0.40
+        MATCH (sr:ScheduledReceipt)-[:FOR_ITEM]->(i:Item)
+        WHERE i.margin_pct > 0.40 AND i.item_type IN ['FP', 'SFP']
         RETURN sum(sr.quantity * i.margin) AS margin
     """).single()
     
     active_lines = session.run("""
         MATCH (sr:ScheduledReceipt)-[:ON_RESOURCE]->(r:Resource)
-        MATCH (sr)-[:FOR_ITEM]->(i:Item {item_type: 'FP'})
+        MATCH (sr)-[:FOR_ITEM]->(i:Item)
+        WHERE i.item_type IN ['FP', 'SFP']
         RETURN count(DISTINCT r.line_name) AS total
     """).single()
 
@@ -121,7 +123,8 @@ CRITICAL DATABASE FACTS:
 2. NEVER use date() functions - they don't work with string dates
 3. Line names must be EXACT matches from the list below
 4. "orders" or "work orders" = ScheduledReceipts (production jobs)
-5. ScheduledReceipts don't have a single WO number - identify by item + start_date + quantity
+5. Include BOTH FP (finished products) and SFP (semi-finished products)
+6. ScheduledReceipts don't have a single WO number - identify by item + start_date + quantity
 
 SCHEMA:
 
@@ -149,12 +152,12 @@ ACTUAL RESOURCE LINE NAMES (physical lines - use exact strings):
 - 'TFS 20 (Linie 4)'
 - 'AGGREGATIONSSTATION 1'
 
-THIS WEEK DATES (March 1-9, 2026):
-['1-Mar-26', '2-Mar-26', '3-Mar-26', '4-Mar-26', '5-Mar-26', '6-Mar-26', '7-Mar-26', '8-Mar-26', '9-Mar-26']
+THIS WEEK DATES (March 2-8, 2026 - Calendar week Mon-Sun):
+['2-Mar-26', '3-Mar-26', '4-Mar-26', '5-Mar-26', '6-Mar-26', '7-Mar-26', '8-Mar-26']
 
 WORK ORDER IDENTIFICATION:
 - Always return these fields to identify a work order: sr.item, sr.start_date, sr.quantity
-- Optionally include: sr.sched_date, sr.site, i.description
+- Optionally include: sr.sched_date, sr.site, i.description, i.item_type
 - Do NOT expand to customer orders unless specifically asked
 - One ScheduledReceipt can fulfill multiple CustomerOrders - don't join unless needed
 
@@ -164,9 +167,10 @@ Question: "List work orders starting on Line 5 this week"
 Query:
 MATCH (sr:ScheduledReceipt)-[:ON_RESOURCE]->(r:Resource {{line_name: 'TFS 80/2 (Linie 5 NEU)'}})
 MATCH (sr)-[:FOR_ITEM]->(i:Item)
-WHERE sr.start_date IN ['1-Mar-26', '2-Mar-26', '3-Mar-26', '4-Mar-26', '5-Mar-26', '6-Mar-26', '7-Mar-26', '8-Mar-26', '9-Mar-26']
+WHERE sr.start_date IN ['2-Mar-26', '3-Mar-26', '4-Mar-26', '5-Mar-26', '6-Mar-26', '7-Mar-26', '8-Mar-26']
 RETURN sr.item AS item,
        i.description AS product_name,
+       i.item_type AS type,
        sr.start_date AS start_date,
        sr.sched_date AS completion_date,
        sr.quantity AS quantity
@@ -175,13 +179,15 @@ LIMIT 100
 
 Question: "Which work orders have no available inventory?"
 Query:
-MATCH (sr:ScheduledReceipt)-[:FOR_ITEM]->(i:Item {{item_type: 'FP'}})
+MATCH (sr:ScheduledReceipt)-[:FOR_ITEM]->(i:Item)
+WHERE i.item_type IN ['FP', 'SFP']
 OPTIONAL MATCH (inv:Inventory)-[:FOR_ITEM]->(i)
 WHERE NOT inv.is_quarantine
 WITH sr, i, sum(COALESCE(inv.quantity, 0)) AS available_inventory
 WHERE available_inventory = 0
 RETURN sr.item AS item,
        i.description AS product_name,
+       i.item_type AS type,
        sr.start_date AS start_date,
        sr.quantity AS quantity,
        available_inventory
@@ -191,8 +197,8 @@ LIMIT 100
 Question: "Which lines make high-margin products?"
 Query:
 MATCH (sr:ScheduledReceipt)-[:ON_RESOURCE]->(r:Resource)
-MATCH (sr)-[:FOR_ITEM]->(i:Item {{item_type: 'FP'}})
-WHERE i.margin_pct > 0.40
+MATCH (sr)-[:FOR_ITEM]->(i:Item)
+WHERE i.margin_pct > 0.40 AND i.item_type IN ['FP', 'SFP']
 RETURN r.line_name AS line,
        count(DISTINCT i.code) AS products,
        sum(sr.quantity * i.margin) AS total_margin
@@ -203,7 +209,8 @@ Question: "Show must-win customers"
 Query:
 MATCH (c:Customer {{must_win: true}})
 OPTIONAL MATCH (c)<-[:FOR_CUSTOMER]-(co:CustomerOrder)<-[:FULFILLS]-(sr:ScheduledReceipt)
-OPTIONAL MATCH (sr)-[:FOR_ITEM]->(i:Item {{item_type: 'FP'}})
+OPTIONAL MATCH (sr)-[:FOR_ITEM]->(i:Item)
+WHERE i.item_type IN ['FP', 'SFP']
 RETURN c.customer_number AS customer,
        c.country AS country,
        count(DISTINCT co) AS orders,
@@ -212,10 +219,11 @@ ORDER BY revenue DESC
 
 Question: "What products have available inventory?"
 Query:
-MATCH (inv:Inventory)-[:FOR_ITEM]->(i:Item {{item_type: 'FP'}})
-WHERE NOT inv.is_quarantine AND inv.quantity > 0
+MATCH (inv:Inventory)-[:FOR_ITEM]->(i:Item)
+WHERE NOT inv.is_quarantine AND inv.quantity > 0 AND i.item_type IN ['FP', 'SFP']
 RETURN i.code AS product,
        i.description AS name,
+       i.item_type AS type,
        sum(inv.quantity) AS available_qty
 ORDER BY available_qty DESC
 LIMIT 20
@@ -226,7 +234,7 @@ RULES:
 - Return ONLY the Cypher query
 - Use exact line names from Resource list above
 - For dates, use IN clause with string list
-- Filter to item_type: 'FP' for finished goods
+- Include BOTH FP and SFP in item_type filters: i.item_type IN ['FP', 'SFP']
 - Always include sr.item, sr.start_date, sr.quantity to identify work orders
 - Don't join to CustomerOrders unless the question specifically asks about customers
 - Add LIMIT 100 at the end
@@ -259,7 +267,8 @@ with col_right:
     with driver.session() as session:
         lines_result = session.run("""
             MATCH (sr:ScheduledReceipt)-[:ON_RESOURCE]->(r:Resource)
-            MATCH (sr)-[:FOR_ITEM]->(i:Item {item_type: 'FP'})
+            MATCH (sr)-[:FOR_ITEM]->(i:Item)
+            WHERE i.item_type IN ['FP', 'SFP']
             RETURN r.line_name AS line,
                    count(sr) AS orders,
                    sum(sr.quantity * i.asp) AS revenue
@@ -277,10 +286,11 @@ with col_right:
             with st.spinner("Analyzing..."):
                 with driver.session() as session:
                     
-                    # Total impact (all orders)
+                    # Total impact (all orders - FP and SFP)
                     total = session.run("""
                         MATCH (sr:ScheduledReceipt)-[:ON_RESOURCE]->(r:Resource {line_name: $line})
-                        MATCH (sr)-[:FOR_ITEM]->(i:Item {item_type: 'FP'})
+                        MATCH (sr)-[:FOR_ITEM]->(i:Item)
+                        WHERE i.item_type IN ['FP', 'SFP']
                         RETURN count(sr) AS orders,
                                count(DISTINCT i) AS products,
                                sum(sr.quantity * i.asp) AS revenue,
@@ -288,7 +298,7 @@ with col_right:
                     """, line=selected_line).single()
                     
                     if not total or total['orders'] == 0:
-                        st.error("❌ No FG production found")
+                        st.error("❌ No production found")
                     else:
                         # Analysis Trail
                         with st.expander("🔍 Analysis Trail", expanded=True):
@@ -298,34 +308,32 @@ with col_right:
                             st.write(f"   ${total['revenue']/1e6:.1f}M revenue | ${total['margin']/1e6:.1f}M margin")
                             
                             st.markdown("---")
-                            st.markdown("### ⏰ CRITICAL THIS WEEK (Starting in 3 Days)")
+                            st.markdown("### ⏰ CRITICAL THIS WEEK (March 2-8)")
                             
                             # This week orders
                             this_week = session.run("""
                                 MATCH (sr:ScheduledReceipt)-[:ON_RESOURCE]->(r:Resource {line_name: $line})
-                                MATCH (sr)-[:FOR_ITEM]->(i:Item {item_type: 'FP'})
-                                WHERE sr.start_date IN ['1-Mar-26', '2-Mar-26', '3-Mar-26', '4-Mar-26', 
-                                                        '5-Mar-26', '6-Mar-26', '7-Mar-26', '8-Mar-26', '9-Mar-26']
+                                MATCH (sr)-[:FOR_ITEM]->(i:Item)
+                                WHERE sr.start_date IN $week AND i.item_type IN ['FP', 'SFP']
                                 RETURN count(sr) AS orders,
                                        sum(sr.quantity * i.asp) AS revenue,
                                        sum(sr.quantity * i.margin) AS margin
-                            """, line=selected_line).single()
+                            """, line=selected_line, week=THIS_WEEK).single()
                             
                             st.info(f"📅 **{this_week['orders']} orders** starting this week (${this_week['revenue']/1e6:.1f}M revenue)")
                             
                             # Inventory check (this week only)
                             inv_check = session.run("""
                                 MATCH (sr:ScheduledReceipt)-[:ON_RESOURCE]->(r:Resource {line_name: $line})
-                                MATCH (sr)-[:FOR_ITEM]->(i:Item {item_type: 'FP'})
-                                WHERE sr.start_date IN ['1-Mar-26', '2-Mar-26', '3-Mar-26', '4-Mar-26', 
-                                                        '5-Mar-26', '6-Mar-26', '7-Mar-26', '8-Mar-26', '9-Mar-26']
+                                MATCH (sr)-[:FOR_ITEM]->(i:Item)
+                                WHERE sr.start_date IN $week AND i.item_type IN ['FP', 'SFP']
                                 OPTIONAL MATCH (inv:Inventory)-[:FOR_ITEM]->(i)
                                 WHERE NOT inv.is_quarantine AND inv.quantity > 0
                                 WITH sr, i, sum(COALESCE(inv.quantity, 0)) AS available
                                 WITH count(DISTINCT CASE WHEN available > 0 THEN i.code END) AS with_stock,
                                      count(DISTINCT CASE WHEN available = 0 THEN i.code END) AS no_stock
                                 RETURN with_stock, no_stock
-                            """, line=selected_line).single()
+                            """, line=selected_line, week=THIS_WEEK).single()
                             
                             if inv_check:
                                 if inv_check['with_stock'] > 0:
@@ -337,13 +345,12 @@ with col_right:
                             mw = session.run("""
                                 MATCH (sr:ScheduledReceipt)-[:ON_RESOURCE]->(r:Resource {line_name: $line})
                                 MATCH (sr)-[:FULFILLS]->(co)-[:FOR_CUSTOMER]->(c:Customer {must_win: true})
-                                MATCH (sr)-[:FOR_ITEM]->(i:Item {item_type: 'FP'})
-                                WHERE sr.start_date IN ['1-Mar-26', '2-Mar-26', '3-Mar-26', '4-Mar-26', 
-                                                        '5-Mar-26', '6-Mar-26', '7-Mar-26', '8-Mar-26', '9-Mar-26']
+                                MATCH (sr)-[:FOR_ITEM]->(i:Item)
+                                WHERE sr.start_date IN $week AND i.item_type IN ['FP', 'SFP']
                                 RETURN count(DISTINCT c) AS count,
                                        collect(DISTINCT c.customer_number)[0..3] AS ids,
                                        sum(sr.quantity * i.margin) AS margin
-                            """, line=selected_line).single()
+                            """, line=selected_line, week=THIS_WEEK).single()
                             
                             if mw and mw['count'] > 0:
                                 st.error(f"🔴 **{mw['count']} must-win customers** affected this week")
@@ -355,13 +362,13 @@ with col_right:
                             # High-margin (this week only)
                             hm = session.run("""
                                 MATCH (sr:ScheduledReceipt)-[:ON_RESOURCE]->(r:Resource {line_name: $line})
-                                MATCH (sr)-[:FOR_ITEM]->(i:Item {item_type: 'FP'})
-                                WHERE sr.start_date IN ['1-Mar-26', '2-Mar-26', '3-Mar-26', '4-Mar-26', 
-                                                        '5-Mar-26', '6-Mar-26', '7-Mar-26', '8-Mar-26', '9-Mar-26']
+                                MATCH (sr)-[:FOR_ITEM]->(i:Item)
+                                WHERE sr.start_date IN $week
+                                  AND i.item_type IN ['FP', 'SFP']
                                   AND i.margin_pct > 0.40
                                 RETURN count(DISTINCT i) AS products,
                                        sum(sr.quantity * i.margin) AS margin
-                            """, line=selected_line).single()
+                            """, line=selected_line, week=THIS_WEEK).single()
                             
                             if hm and hm['products'] > 0:
                                 st.warning(f"💎 **{hm['products']} high-margin products** starting this week (${hm['margin']/1e6:.1f}M)")
@@ -371,15 +378,14 @@ with col_right:
                             # Alternatives
                             alt = session.run("""
                                 MATCH (sr:ScheduledReceipt)-[:ON_RESOURCE]->(r:Resource {line_name: $line})
-                                WHERE sr.start_date IN ['1-Mar-26', '2-Mar-26', '3-Mar-26', '4-Mar-26', 
-                                                        '5-Mar-26', '6-Mar-26', '7-Mar-26', '8-Mar-26', '9-Mar-26']
+                                WHERE sr.start_date IN $week
                                 WITH collect(DISTINCT sr.item) AS items
                                 UNWIND items AS item
                                 MATCH (sr2:ScheduledReceipt {item: item})-[:ON_RESOURCE]->(r2:Resource)
                                 WHERE r2.line_name <> $line
                                 RETURN count(DISTINCT r2.line_name) AS count,
                                        collect(DISTINCT r2.line_name)[0..3] AS lines
-                            """, line=selected_line).single()
+                            """, line=selected_line, week=THIS_WEEK).single()
                             
                             if alt and alt['count'] > 0:
                                 st.success(f"🔧 **{alt['count']} alternative lines** found")
