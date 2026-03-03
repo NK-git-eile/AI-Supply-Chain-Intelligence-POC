@@ -3,7 +3,6 @@ from neo4j import GraphDatabase
 import anthropic
 import pandas as pd
 from datetime import datetime, timedelta
-import os
 
 st.set_page_config(page_title="Production Control Tower", page_icon="🔗", layout="wide")
 
@@ -276,18 +275,26 @@ with st.sidebar:
     
     if st.button("Submit Feedback", use_container_width=True):
         if feedback:
-            # Save to file
+            # Save to session state (Streamlit Cloud compatible)
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            feedback_dir = "/mnt/user-data/outputs"
-            os.makedirs(feedback_dir, exist_ok=True)
             
-            with open(f"{feedback_dir}/feedback.txt", "a") as f:
-                f.write(f"\n{'='*60}\n")
-                f.write(f"Timestamp: {timestamp}\n")
-                f.write(f"Feedback: {feedback}\n")
+            if 'all_feedback' not in st.session_state:
+                st.session_state.all_feedback = []
+            
+            st.session_state.all_feedback.append({
+                'timestamp': timestamp,
+                'feedback': feedback
+            })
             
             st.success("✅ Thank you! Feedback submitted.")
-            st.session_state.feedback_submitted = True
+            
+            # Show recent feedback
+            if len(st.session_state.all_feedback) > 0:
+                with st.expander(f"📝 Feedback Log ({len(st.session_state.all_feedback)} items)"):
+                    for item in reversed(st.session_state.all_feedback[-5:]):  # Show last 5
+                        st.text(f"{item['timestamp']}")
+                        st.text(f"{item['feedback'][:100]}...")
+                        st.markdown("---")
         else:
             st.error("Please enter feedback")
     
@@ -448,11 +455,14 @@ with col_left:
         show_query = st.checkbox("Show query", value=False)
     
     if ask_button and question and all([neo4j_uri, neo4j_password, claude_key]):
-        # Log usage
-        usage_dir = "/mnt/user-data/outputs"
-        os.makedirs(usage_dir, exist_ok=True)
-        with open(f"{usage_dir}/usage_log.txt", "a") as f:
-            f.write(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}: {question}\n")
+        # Log usage to session state
+        if 'usage_log' not in st.session_state:
+            st.session_state.usage_log = []
+        
+        st.session_state.usage_log.append({
+            'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'question': question
+        })
         
         with st.spinner("Analyzing..."):
             try:
