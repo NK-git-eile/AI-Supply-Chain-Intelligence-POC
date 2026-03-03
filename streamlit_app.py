@@ -91,7 +91,7 @@ if st.session_state.show_intro:
         st.markdown("---")
         
         st.markdown("""
-        <div style='background: #e0f2fe; border-left: 4px solid #0284c7; padding: 0.75rem 1rem; border-radius: 4px;'>
+        <div style='background: #e0f2fe; border-left: 4px solid #0284c7; padding: 0.75rem 1rem; border-radius: 4px; margin-bottom: 1rem;'>
             💬 <strong>We want your feedback!</strong> This is a proof of concept — use the <strong>Feedback</strong> section in the left sidebar to share your thoughts.
         </div>
         """, unsafe_allow_html=True)
