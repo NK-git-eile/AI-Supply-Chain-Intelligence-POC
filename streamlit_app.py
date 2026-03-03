@@ -200,18 +200,17 @@ RETURN sr.item, i.description, sr.quantity""", language="cypher")
         
         st.markdown("---")
         
-        st.success("""
-        ### ✅ You're Ready!
-        
-        Start by selecting a question category or use the simulator to explore line downtime scenarios.
-        
-        **Don't forget:** Share your feedback using the sidebar form!
-        """)
-        
         st.markdown("""
-        <div style='background: #f0f4ff; border-left: 4px solid #6366f1; padding: 0.75rem 1rem; border-radius: 4px;'>
+        <div style='background: #f0f4ff; border-left: 4px solid #6366f1; padding: 0.75rem 1rem; border-radius: 4px; margin-bottom: 0.75rem;'>
             <span style='font-size: 1.1rem;'><strong>🔮 Future Vision:</strong> Evolve this PoC into a full <strong>AI-enabled Control Tower</strong> with live KPIs, root cause analysis, and Appian workflows to execute recommended actions — ensuring <strong>planning and execution are in synch</strong>.</span>
         </div>
+        """, unsafe_allow_html=True)
+        
+        st.markdown("""
+        <div style='background: #d1fae5; border-radius: 6px; padding: 0.5rem 0.8rem;'>
+            ✅ <strong>You're Ready!</strong> Select a question category or use the simulator to explore line downtime scenarios. Share feedback via the sidebar.
+        </div>
+        <div style='margin-bottom: 1rem;'></div>
         """, unsafe_allow_html=True)
         
         col_btn1, col_btn2 = st.columns([1, 2])
