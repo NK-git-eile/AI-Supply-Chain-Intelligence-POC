@@ -4,7 +4,7 @@ import anthropic
 import pandas as pd
 from datetime import datetime, timedelta
 
-st.set_page_config(page_title="Production Control Tower", page_icon="🔗", layout="wide")
+st.set_page_config(page_title="AI Operations Intelligence", page_icon="🔗", layout="wide")
 
 # Password Protection
 if 'authenticated' not in st.session_state:
@@ -13,8 +13,8 @@ if 'authenticated' not in st.session_state:
 if not st.session_state.authenticated:
     st.markdown("""
     <div style='background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%); padding: 2rem; border-radius: 10px; text-align: center; color: white; margin-bottom: 2rem;'>
-        <h1>🔗 Production Control Tower</h1>
-        <p>Berlin Manufacturing Site - Authorized Access Only</p>
+        <h1>🤖 AI Operations Intelligence</h1>
+        <p>Berlin Manufacturing - Proof of Concept</p>
     </div>
     """, unsafe_allow_html=True)
     
@@ -39,7 +39,8 @@ if st.session_state.show_intro:
     
     # Slide 1: Data Overview
     if st.session_state.intro_page == 1:
-        st.markdown("## 👋 Welcome to Production Control Tower")
+        st.markdown("## 👋 Welcome to AI Operations Intelligence")
+        st.markdown("*A proof of concept demonstrating AI-enabled insights on live manufacturing data. This capability could evolve into a full Production Control Tower with KPIs, root cause analysis, and Appian workflow integration.*")
         
         col1, col2 = st.columns([1, 1])
         
@@ -226,6 +227,12 @@ RETURN sr.item, i.description, sr.quantity""", language="cypher")
         **Don't forget:** Share your feedback using the sidebar form!
         """)
         
+        st.markdown("""
+        <div style='background: #f0f4ff; border-left: 4px solid #6366f1; padding: 0.5rem 0.8rem; border-radius: 4px; font-size: 0.9em;'>
+            <strong>🔮 Future Vision:</strong> With validated value, this PoC could grow into a full Control Tower — adding live KPIs, root cause analysis, and Appian workflows for executing recommended actions directly.
+        </div>
+        """, unsafe_allow_html=True)
+        
         col_btn1, col_btn2 = st.columns([1, 2])
         with col_btn1:
             if st.button("← Back", use_container_width=True):
@@ -307,7 +314,7 @@ with st.sidebar:
 current_time = datetime.now()
 st.markdown(f"""
 <div class="main-header">
-    <h1>🔗 Production Control Tower - Berlin</h1>
+    <h1>🤖 AI Operations Intelligence - Berlin</h1>
     <p>{current_time.strftime('%B %d, %Y')} | {current_time.strftime('%H:%M')} CET</p>
 </div>
 """, unsafe_allow_html=True)
@@ -919,4 +926,4 @@ with col_right:
                         for rec in recs:
                             st.markdown(rec)
 
-st.caption("Production Control Tower - Berlin Pilot | Blue Yonder data (Feb 28, 2026) + Mock financials | 🔒 Secure Access")
+st.caption("AI Operations Intelligence - Berlin PoC | Blue Yonder data (Feb 28, 2026) + Mock financials | 🔒 Secure Access")
