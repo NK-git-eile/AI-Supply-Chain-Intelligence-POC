@@ -454,7 +454,15 @@ with col_left:
         ask_button = st.button("🔍 Ask AI", use_container_width=True, type="primary")
     with col_btn2:
         show_query = st.checkbox("Show query", value=False)
-    
+
+# Store results in session state so we can render below
+if 'ai_result_data' not in st.session_state:
+    st.session_state.ai_result_data = None
+    st.session_state.ai_result_query = None
+    st.session_state.ai_result_insight = None
+    st.session_state.ai_result_empty_msg = None
+
+with col_left:
     if ask_button and question and all([neo4j_uri, neo4j_password, claude_key]):
         # Log usage to session state
         if 'usage_log' not in st.session_state:
@@ -464,6 +472,12 @@ with col_left:
             'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
             'question': question
         })
+        
+        # Reset previous results
+        st.session_state.ai_result_data = None
+        st.session_state.ai_result_query = None
+        st.session_state.ai_result_insight = None
+        st.session_state.ai_result_empty_msg = None
         
         with st.spinner("Analyzing..."):
             try:
@@ -615,14 +629,13 @@ Query:"""}]
                 # ----- END VALIDATION -----
                 
                 if show_query:
-                    st.code(query, language="cypher")
+                    st.session_state.ai_result_query = query
                 
                 with driver.session() as session:
                     data = [dict(r) for r in session.run(query)]
                 
                 if data:
-                    # Show the data table
-                    st.dataframe(pd.DataFrame(data), use_container_width=True, height=300)
+                    st.session_state.ai_result_data = pd.DataFrame(data)
                     
                     # AI interpretation of results
                     with st.spinner("Interpreting results..."):
@@ -651,14 +664,11 @@ Summary:"""}]
                         )
                         
                         summary = interpret_response.content[0].text.strip()
-                        # Fix spacing issues
                         summary = summary.replace('$', ' $').replace('  ', ' ')
                         summary = ' '.join(summary.split())
-                        
-                        st.info(f"💡 **Insight:** {summary}")
+                        st.session_state.ai_result_insight = summary
                     
                 else:
-                    # Smart interpretation of empty results
                     interpret_response = client.messages.create(
                         model="claude-sonnet-4-20250514",
                         max_tokens=150,
@@ -686,10 +696,24 @@ Answer:"""}]
                     )
                     
                     answer = interpret_response.content[0].text.strip()
-                    st.success(f"✅ {answer}")
+                    st.session_state.ai_result_empty_msg = answer
                     
             except Exception as e:
                 st.error(f"Error: {e}")
+
+# ----- RENDER AI RESULTS BELOW ASK AI (full width under left column) -----
+with col_left:
+    if st.session_state.get('ai_result_query'):
+        st.code(st.session_state.ai_result_query, language="cypher")
+    
+    if st.session_state.get('ai_result_data') is not None:
+        st.dataframe(st.session_state.ai_result_data, use_container_width=True, height=300)
+    
+    if st.session_state.get('ai_result_insight'):
+        st.info(f"💡 **Insight:** {st.session_state.ai_result_insight}")
+    
+    if st.session_state.get('ai_result_empty_msg'):
+        st.success(f"✅ {st.session_state.ai_result_empty_msg}")
 
 with col_right:
     st.subheader("🚨 Line Downtime Simulator")
