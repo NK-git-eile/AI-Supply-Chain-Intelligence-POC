@@ -461,6 +461,7 @@ with col_left:
         if selected_from_dropdown != "Select a question...":
             st.session_state.selected_question = selected_from_dropdown
             st.session_state.selected_category = None
+            st.session_state.question_key = st.session_state.get('question_key', 0) + 1
             st.rerun()
     
     # Initialize text area key counter for resetting
