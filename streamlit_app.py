@@ -475,7 +475,7 @@ with col_left:
 CRITICAL DATABASE FACTS:
 1. Dates are STRINGS in format 'D-MMM-YY' (e.g., '1-Mar-26', '15-Apr-26')
 2. NEVER use date() functions - they don't work with string dates
-3. Line names must be EXACT matches from the list below
+3. Line names must be EXACT matches - use the LINE NAME MAPPING below
 4. "orders" or "work orders" = ScheduledReceipts (production jobs)
 5. Include BOTH FP (finished products) and SFP (semi-finished products)
 6. ScheduledReceipts don't have a single WO number - identify by item + start_date + quantity
@@ -495,16 +495,18 @@ Relationships:
 - (ScheduledReceipt)-[:FULFILLS]->(CustomerOrder)-[:FOR_CUSTOMER]->(Customer)
 - (Inventory)-[:FOR_ITEM]->(Item)
 
-ACTUAL RESOURCE LINE NAMES (physical lines - use exact strings):
-- 'TFS 80/2 (Linie 5 NEU)'
-- 'LINIE 9'
-- 'Linie 11 EDO-Konfektion. II'
-- 'Linie 6 EDO-Konfektion. I'
-- 'BOSCH 1 (Linie 1)'
-- 'ROMMELAG BOTTELPACK III'
-- 'ROMMELAG BOTTELPACK IV'
-- 'TFS 20 (Linie 4)'
-- 'AGGREGATIONSSTATION 1'
+LINE NAME MAPPING (users refer to lines casually - ALWAYS use the EXACT string after the arrow):
+- "Line 1" / "Linie 1" / "Bosch" / "Bosch 1"         → 'BOSCH 1 (Linie 1)'
+- "Line 4" / "Linie 4" / "TFS 20"                      → 'TFS 20 (Linie 4)'
+- "Line 5" / "Linie 5" / "TFS 80" / "Linie 5 NEU"     → 'TFS 80/2 (Linie 5 NEU)'
+- "Line 6" / "Linie 6" / "EDO 1" / "EDO Konfektion 1"  → 'Linie 6 EDO-Konfektion. I'
+- "Line 9" / "Linie 9"                                  → 'LINIE 9'
+- "Line 11" / "Linie 11" / "EDO 2" / "EDO Konfektion 2" → 'Linie 11 EDO-Konfektion. II'
+- "Rommelag 3" / "Bottelpack 3" / "Bottelpack III"      → 'ROMMELAG BOTTELPACK III'
+- "Rommelag 4" / "Bottelpack 4" / "Bottelpack IV"       → 'ROMMELAG BOTTELPACK IV'
+- "Aggregation" / "Aggregation 1"                        → 'AGGREGATIONSSTATION 1'
+
+CRITICAL: NEVER use the casual name (e.g., "Line 5") in a Cypher query. ALWAYS substitute the exact database string (e.g., 'TFS 80/2 (Linie 5 NEU)').
 
 THIS WEEK DATES (March 2-8, 2026 - Calendar week Mon-Sun):
 ['2-Mar-26', '3-Mar-26', '4-Mar-26', '5-Mar-26', '6-Mar-26', '7-Mar-26', '8-Mar-26']
@@ -529,7 +531,7 @@ NOW ANSWER THIS QUESTION: {question}
 
 RULES:
 - Return ONLY the Cypher query
-- Use exact line names from Resource list above
+- Use EXACT line names from the LINE NAME MAPPING above (the string AFTER the arrow)
 - For dates, use IN clause with string list
 - Include BOTH FP and SFP in item_type filters: i.item_type IN ['FP', 'SFP']
 - Always include sr.item, sr.start_date, sr.quantity to identify work orders
@@ -543,6 +545,54 @@ Query:"""}]
                 query = response.content[0].text.strip()
                 if '```' in query:
                     query = query.split('```')[1].replace('cypher','').strip()
+                
+                # ----- VALIDATION: Check for casual line names that slipped through -----
+                casual_to_exact = {
+                    "'Line 1'": "'BOSCH 1 (Linie 1)'",
+                    "'Line 4'": "'TFS 20 (Linie 4)'",
+                    "'Line 5'": "'TFS 80/2 (Linie 5 NEU)'",
+                    "'Line 6'": "'Linie 6 EDO-Konfektion. I'",
+                    "'Line 9'": "'LINIE 9'",
+                    "'Line 11'": "'Linie 11 EDO-Konfektion. II'",
+                    '"Line 1"': "'BOSCH 1 (Linie 1)'",
+                    '"Line 4"': "'TFS 20 (Linie 4)'",
+                    '"Line 5"': "'TFS 80/2 (Linie 5 NEU)'",
+                    '"Line 6"': "'Linie 6 EDO-Konfektion. I'",
+                    '"Line 9"': "'LINIE 9'",
+                    '"Line 11"': "'Linie 11 EDO-Konfektion. II'",
+                    "'Linie 5'": "'TFS 80/2 (Linie 5 NEU)'",
+                    "'Linie 1'": "'BOSCH 1 (Linie 1)'",
+                    "'Linie 4'": "'TFS 20 (Linie 4)'",
+                    "'Linie 6'": "'Linie 6 EDO-Konfektion. I'",
+                    "'Linie 9'": "'LINIE 9'",
+                    "'Linie 11'": "'Linie 11 EDO-Konfektion. II'",
+                    '"Linie 5"': "'TFS 80/2 (Linie 5 NEU)'",
+                    '"Linie 1"': "'BOSCH 1 (Linie 1)'",
+                    '"Linie 4"': "'TFS 20 (Linie 4)'",
+                    '"Linie 6"': "'Linie 6 EDO-Konfektion. I'",
+                    '"Linie 9"': "'LINIE 9'",
+                    '"Linie 11"': "'Linie 11 EDO-Konfektion. II'",
+                    # Also catch line_name: 'Line X' patterns
+                    "line_name: 'Line 5'": "line_name: 'TFS 80/2 (Linie 5 NEU)'",
+                    "line_name: 'Line 1'": "line_name: 'BOSCH 1 (Linie 1)'",
+                    "line_name: 'Line 4'": "line_name: 'TFS 20 (Linie 4)'",
+                    "line_name: 'Line 6'": "line_name: 'Linie 6 EDO-Konfektion. I'",
+                    "line_name: 'Line 9'": "line_name: 'LINIE 9'",
+                    "line_name: 'Line 11'": "line_name: 'Linie 11 EDO-Konfektion. II'",
+                    # CONTAINS patterns
+                    "CONTAINS 'Line 5'": "= 'TFS 80/2 (Linie 5 NEU)'",
+                    "CONTAINS 'Line 1'": "= 'BOSCH 1 (Linie 1)'",
+                    "CONTAINS 'Line 4'": "= 'TFS 20 (Linie 4)'",
+                    "CONTAINS 'Line 9'": "= 'LINIE 9'",
+                    "CONTAINS 'Line 11'": "= 'Linie 11 EDO-Konfektion. II'",
+                    "CONTAINS 'Line 6'": "= 'Linie 6 EDO-Konfektion. I'",
+                    "CONTAINS '5'": "= 'TFS 80/2 (Linie 5 NEU)'",
+                }
+                
+                for casual, exact in casual_to_exact.items():
+                    if casual in query:
+                        query = query.replace(casual, exact)
+                # ----- END VALIDATION -----
                 
                 if show_query:
                     st.code(query, language="cypher")
@@ -596,7 +646,13 @@ Summary:"""}]
 
 The database query returned no results (0 rows).
 
+The generated Cypher query was:
+{query}
+
 Provide a clear, direct answer to the user's question based on this empty result.
+
+Consider whether the query might have an issue (wrong line name, wrong date format, etc.)
+or if the answer genuinely is zero/none.
 
 Be concise and helpful. Use natural language. Examples:
 - "No must-win customers are affected by Line 5 this week"
@@ -671,7 +727,11 @@ with col_right:
                                        sum(sr.quantity * i.margin) AS margin
                             """, line=selected_line, week=THIS_WEEK).single()
                             
-                            st.info(f"📅 **{this_week['orders']} orders** starting this week (${this_week['revenue']/1e6:.1f}M revenue)")
+                            tw_orders = this_week['orders'] if this_week and this_week['orders'] else 0
+                            tw_revenue = this_week['revenue'] if this_week and this_week['revenue'] else 0
+                            tw_margin = this_week['margin'] if this_week and this_week['margin'] else 0
+                            
+                            st.info(f"📅 **{tw_orders} orders** starting this week (${tw_revenue/1e6:.1f}M revenue)")
                             
                             inv_check = session.run("""
                                 MATCH (sr:ScheduledReceipt)-[:ON_RESOURCE]->(r:Resource {line_name: $line})
@@ -753,9 +813,9 @@ with col_right:
                         
                         with col_sum2:
                             st.markdown("**Critical This Week:**")
-                            st.write(f"Orders: {this_week['orders']}")
-                            st.write(f"Revenue: ${this_week['revenue']/1e6:.1f}M")
-                            st.write(f"Margin: ${this_week['margin']/1e6:.1f}M")
+                            st.write(f"Orders: {tw_orders}")
+                            st.write(f"Revenue: ${tw_revenue/1e6:.1f}M")
+                            st.write(f"Margin: ${tw_margin/1e6:.1f}M")
                         
                         st.markdown("---")
                         st.markdown("### 💡 Recommended Actions")
