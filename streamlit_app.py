@@ -177,13 +177,18 @@ with col_left:
             
             if st.button(label, key=f"prompt_{idx}", use_container_width=True):
                 st.session_state.current_question = prompt
+                st.rerun()
+    
+    # Initialize session state if not exists
+    if 'current_question' not in st.session_state:
+        st.session_state.current_question = ''
     
     # Question text area
     question = st.text_area(
         "", 
         height=100, 
         placeholder="Or type your own question...",
-        value=st.session_state.get('current_question', ''),
+        value=st.session_state.current_question,
         label_visibility="collapsed",
         key="question_input"
     )
