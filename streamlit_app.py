@@ -463,20 +463,32 @@ with col_left:
             st.session_state.selected_category = None
             st.rerun()
     
-    # Question text area (no key parameter to avoid conflicts)
+    # Initialize text area key counter for resetting
+    if 'question_key' not in st.session_state:
+        st.session_state.question_key = 0
+    
+    # If a dropdown question was just selected, set it as the default
+    default_question = st.session_state.get('selected_question', '')
+    
+    # Question text area with key for proper reset control
     question = st.text_area(
         "Your Question:", 
         height=100, 
-        value=st.session_state.get('selected_question', ''),
+        value=default_question,
+        key=f"question_input_{st.session_state.question_key}",
         placeholder="Select a category above or type your own question..."
     )
     
-    # Clear button
-    if st.session_state.get('selected_question', ''):
-        if st.button("🔄 Clear & Start Over"):
-            st.session_state.selected_question = ""
-            st.session_state.selected_category = None
-            st.rerun()
+    # Clear button - always visible
+    if st.button("🔄 Clear & Start Over"):
+        st.session_state.selected_question = ""
+        st.session_state.selected_category = None
+        st.session_state.question_key += 1  # Forces text_area to reset
+        st.session_state.ai_result_data = None
+        st.session_state.ai_result_query = None
+        st.session_state.ai_result_insight = None
+        st.session_state.ai_result_empty_msg = None
+        st.rerun()
     
     col_btn1, col_btn2 = st.columns([1, 1])
     with col_btn1:
