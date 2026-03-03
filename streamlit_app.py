@@ -324,48 +324,77 @@ driver = GraphDatabase.driver(neo4j_uri, auth=(neo4j_user, neo4j_password))
 # This week dates (March 2-8, 2026 - Calendar week Mon-Sun)
 THIS_WEEK = ['2-Mar-26', '3-Mar-26', '4-Mar-26', '5-Mar-26', '6-Mar-26', '7-Mar-26', '8-Mar-26']
 
-# KPIs
-with driver.session() as session:
-    starting = session.run("""
-        MATCH (sr:ScheduledReceipt)-[:FOR_ITEM]->(i:Item)
-        WHERE sr.start_date IN $week AND i.item_type IN ['FP', 'SFP']
-        RETURN sum(sr.quantity * i.asp) AS revenue, count(DISTINCT sr) AS orders
-    """, week=THIS_WEEK).single()
+# ----- CACHED DATA FUNCTIONS (run once, not on every rerun) -----
+@st.cache_data(ttl=300, show_spinner=False)
+def get_kpis(_driver, week):
+    """Cache KPI queries for 5 minutes to avoid re-running on every interaction."""
+    with _driver.session() as session:
+        starting = session.run("""
+            MATCH (sr:ScheduledReceipt)-[:FOR_ITEM]->(i:Item)
+            WHERE sr.start_date IN $week AND i.item_type IN ['FP', 'SFP']
+            RETURN sum(sr.quantity * i.asp) AS revenue, count(DISTINCT sr) AS orders
+        """, week=week).single()
+        
+        must_win = session.run("""
+            MATCH (sr:ScheduledReceipt)-[:FULFILLS]->(co)-[:FOR_CUSTOMER]->(c:Customer {must_win: true})
+            MATCH (sr)-[:FOR_ITEM]->(i:Item)
+            WHERE sr.start_date IN $week AND i.item_type IN ['FP', 'SFP']
+            RETURN sum(sr.quantity * i.asp) AS value, count(DISTINCT c) AS customers
+        """, week=week).single()
+        
+        high_margin = session.run("""
+            MATCH (sr:ScheduledReceipt)-[:FOR_ITEM]->(i:Item)
+            WHERE i.margin_pct > 0.40 AND i.item_type IN ['FP', 'SFP']
+            RETURN sum(sr.quantity * i.margin) AS margin
+        """).single()
+        
+        active_lines = session.run("""
+            MATCH (sr:ScheduledReceipt)-[:ON_RESOURCE]->(r:Resource)
+            MATCH (sr)-[:FOR_ITEM]->(i:Item)
+            WHERE i.item_type IN ['FP', 'SFP']
+            RETURN count(DISTINCT r.line_name) AS total
+        """).single()
     
-    must_win = session.run("""
-        MATCH (sr:ScheduledReceipt)-[:FULFILLS]->(co)-[:FOR_CUSTOMER]->(c:Customer {must_win: true})
-        MATCH (sr)-[:FOR_ITEM]->(i:Item)
-        WHERE sr.start_date IN $week AND i.item_type IN ['FP', 'SFP']
-        RETURN sum(sr.quantity * i.asp) AS value, count(DISTINCT c) AS customers
-    """, week=THIS_WEEK).single()
-    
-    high_margin = session.run("""
-        MATCH (sr:ScheduledReceipt)-[:FOR_ITEM]->(i:Item)
-        WHERE i.margin_pct > 0.40 AND i.item_type IN ['FP', 'SFP']
-        RETURN sum(sr.quantity * i.margin) AS margin
-    """).single()
-    
-    active_lines = session.run("""
-        MATCH (sr:ScheduledReceipt)-[:ON_RESOURCE]->(r:Resource)
-        MATCH (sr)-[:FOR_ITEM]->(i:Item)
-        WHERE i.item_type IN ['FP', 'SFP']
-        RETURN count(DISTINCT r.line_name) AS total
-    """).single()
+    return (
+        dict(starting) if starting else {'revenue': 0, 'orders': 0},
+        dict(must_win) if must_win else {'value': 0, 'customers': 0},
+        dict(high_margin) if high_margin else {'margin': 0},
+        dict(active_lines) if active_lines else {'total': 0},
+    )
+
+@st.cache_data(ttl=300, show_spinner=False)
+def get_line_data(_driver):
+    """Cache line data for simulator dropdown."""
+    with _driver.session() as session:
+        lines_result = session.run("""
+            MATCH (sr:ScheduledReceipt)-[:ON_RESOURCE]->(r:Resource)
+            MATCH (sr)-[:FOR_ITEM]->(i:Item)
+            WHERE i.item_type IN ['FP', 'SFP']
+            RETURN r.line_name AS line,
+                   count(sr) AS orders,
+                   sum(sr.quantity * i.asp) AS revenue
+            ORDER BY revenue DESC
+            LIMIT 10
+        """)
+        return [(row['line'], row['orders'], row['revenue']) for row in lines_result]
+
+# KPIs (cached - only hits Neo4j once per 5 minutes)
+starting, must_win, high_margin, active_lines = get_kpis(driver, tuple(THIS_WEEK))
 
 col1, col2, col3, col4 = st.columns(4)
 
-revenue = starting['revenue'] if starting and starting['revenue'] else 0
-orders = starting['orders'] if starting and starting['orders'] else 0
+revenue = starting.get('revenue') or 0
+orders = starting.get('orders') or 0
 col1.metric("This Week", f"${revenue/1e6:.1f}M", f"{orders} orders")
 
-mw_value = must_win['value'] if must_win and must_win['value'] else 0
-mw_custs = must_win['customers'] if must_win and must_win['customers'] else 0
+mw_value = must_win.get('value') or 0
+mw_custs = must_win.get('customers') or 0
 col2.metric("Must-Win", f"${mw_value/1e6:.1f}M", f"{mw_custs} customers")
 
-hm_margin = high_margin['margin'] if high_margin and high_margin['margin'] else 0
+hm_margin = high_margin.get('margin') or 0
 col3.metric("High-Margin", f"${hm_margin/1e6:.1f}M", ">40%")
 
-lines_count = active_lines['total'] if active_lines and active_lines['total'] else 0
+lines_count = active_lines.get('total') or 0
 col4.metric("Lines", f"{lines_count}", "Active")
 
 # Two columns
@@ -718,18 +747,8 @@ with col_left:
 with col_right:
     st.subheader("🚨 Line Downtime Simulator")
     
-    with driver.session() as session:
-        lines_result = session.run("""
-            MATCH (sr:ScheduledReceipt)-[:ON_RESOURCE]->(r:Resource)
-            MATCH (sr)-[:FOR_ITEM]->(i:Item)
-            WHERE i.item_type IN ['FP', 'SFP']
-            RETURN r.line_name AS line,
-                   count(sr) AS orders,
-                   sum(sr.quantity * i.asp) AS revenue
-            ORDER BY revenue DESC
-            LIMIT 10
-        """)
-        line_data = [(row['line'], row['orders'], row['revenue']) for row in lines_result]
+    # Line data cached - no Neo4j call on every rerun
+    line_data = get_line_data(driver)
     
     if line_data:
         line_options = [f"{line} — {orders} orders, ${rev/1e6:.1f}M" for line, orders, rev in line_data]
