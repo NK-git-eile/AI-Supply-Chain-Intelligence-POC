@@ -484,6 +484,14 @@ with col_left:
         placeholder="Select a category above or type your own question..."
     )
     
+    col_btn1, col_btn2, col_btn3 = st.columns([2, 1, 1])
+    with col_btn1:
+        ask_button = st.button("🔍 Ask AI", use_container_width=True, type="primary")
+    with col_btn2:
+        show_query = st.checkbox("Show query", value=False)
+    with col_btn3:
+        clear_button = st.button("🔄 Clear", use_container_width=True)
+    
     # Handle clear button
     if clear_button:
         st.session_state.selected_question = ""
@@ -494,14 +502,6 @@ with col_left:
         st.session_state.ai_result_insight = None
         st.session_state.ai_result_empty_msg = None
         st.rerun()
-    
-    col_btn1, col_btn2, col_btn3 = st.columns([2, 1, 1])
-    with col_btn1:
-        ask_button = st.button("🔍 Ask AI", use_container_width=True, type="primary")
-    with col_btn2:
-        show_query = st.checkbox("Show query", value=False)
-    with col_btn3:
-        clear_button = st.button("🔄 Clear", use_container_width=True)
 
 # Store results in session state so we can render below
 if 'ai_result_data' not in st.session_state:
