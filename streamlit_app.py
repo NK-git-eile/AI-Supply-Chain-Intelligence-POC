@@ -703,17 +703,17 @@ Answer:"""}]
 
 # ----- RENDER AI RESULTS BELOW ASK AI (full width under left column) -----
 with col_left:
-    if st.session_state.get('ai_result_query'):
-        st.code(st.session_state.ai_result_query, language="cypher")
-    
-    if st.session_state.get('ai_result_data') is not None:
-        st.dataframe(st.session_state.ai_result_data, use_container_width=True, height=300)
-    
     if st.session_state.get('ai_result_insight'):
         st.info(f"💡 **Insight:** {st.session_state.ai_result_insight}")
     
     if st.session_state.get('ai_result_empty_msg'):
         st.success(f"✅ {st.session_state.ai_result_empty_msg}")
+    
+    if st.session_state.get('ai_result_query'):
+        st.code(st.session_state.ai_result_query, language="cypher")
+    
+    if st.session_state.get('ai_result_data') is not None:
+        st.dataframe(st.session_state.ai_result_data, use_container_width=True, height=300)
 
 with col_right:
     st.subheader("🚨 Line Downtime Simulator")
