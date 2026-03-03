@@ -82,16 +82,18 @@ if st.session_state.show_intro:
             - ⚠️ COGS (Cost of Goods Sold)
             - ⚠️ Margin calculations
             
+            📌 *"High margin" is defined as margin > 40% (`margin_pct > 0.40`)*
+            
             *Financial figures are placeholder values for demonstration purposes.*
             """)
         
         st.markdown("---")
         
         st.markdown("""
-        > **📌 Definitions:** "High margin" = margin > 40% (`margin_pct > 0.40`)
-        
-        > **💬 Feedback?** Use the sidebar form — your input helps us improve this tool.
-        """)
+        <div style='background: #e0f2fe; border-left: 4px solid #0284c7; padding: 0.75rem 1rem; border-radius: 4px;'>
+            💬 <strong>We want your feedback!</strong> This is a proof of concept — use the <strong>Feedback</strong> section in the left sidebar to share your thoughts.
+        </div>
+        """, unsafe_allow_html=True)
         
         col_btn1, col_btn2, col_btn3 = st.columns([1, 1, 1])
         with col_btn2:
@@ -450,7 +452,7 @@ with col_left:
     
     col_btn1, col_btn2 = st.columns([1, 1])
     with col_btn1:
-        ask_button = st.button("🔍 Ask AI", use_container_width=True)
+        ask_button = st.button("🔍 Ask AI", use_container_width=True, type="primary")
     with col_btn2:
         show_query = st.checkbox("Show query", value=False)
     
