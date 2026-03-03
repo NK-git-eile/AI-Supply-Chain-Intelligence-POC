@@ -99,7 +99,7 @@ col_left, col_right = st.columns(2)
 
 with col_left:
     st.subheader("💬 Ask Questions")
-    question = st.text_area("", height=100, placeholder="Which lines make high-margin products?", label_visibility="collapsed")
+    question = st.text_area("", height=100, placeholder="What is the highest margin WO starting on line 5 this week?", label_visibility="collapsed")
     
     col_btn1, col_btn2 = st.columns([1, 1])
     with col_btn1:
@@ -113,21 +113,94 @@ with col_left:
                 client = anthropic.Anthropic(api_key=claude_key)
                 response = client.messages.create(
                     model="claude-sonnet-4-20250514",
-                    max_tokens=800,
-                    messages=[{"role": "user", "content": f"""Write a Neo4j Cypher query for: {question}
+                    max_tokens=1200,
+                    messages=[{"role": "user", "content": f"""You are a Neo4j Cypher query expert. Write a query to answer this question.
 
-Schema: 
-- ScheduledReceipt (start_date format: '1-Mar-26', '2-Mar-26', etc.) -[:ON_RESOURCE]-> Resource (line_name: 'TFS 80/2 (Linie 5 NEU)', 'LINIE 9', etc.)
-- ScheduledReceipt -[:FOR_ITEM]-> Item (asp, margin, margin_pct, item_type: 'FP' or 'SFP')
-- ScheduledReceipt -[:FULFILLS]-> CustomerOrder -[:FOR_CUSTOMER]-> Customer (must_win: boolean, customer_number)
-- Inventory (quantity, is_quarantine: boolean) -[:FOR_ITEM]-> Item
+CRITICAL DATABASE FACTS:
+1. Dates are STRINGS in format 'D-MMM-YY' (e.g., '1-Mar-26', '15-Apr-26')
+2. NEVER use date() functions - they don't work with string dates
+3. Line names must be EXACT matches from the list below
 
-Important:
-- Dates are strings in format 'D-MMM-YY' (e.g., '1-Mar-26', '15-Apr-26')
-- Use exact line names from Resource.line_name
-- Filter item_type: 'FP' for finished goods
+SCHEMA:
 
-Return ONLY the Cypher query, limit 100."""}]
+Nodes:
+- ScheduledReceipt: item (string), start_date (string), sched_date (string), quantity (float)
+- Resource: line_name (string), code (string), site (string)
+- Item: code (string), item_type (string: 'FP' or 'SFP'), asp (float), margin (float), margin_pct (float)
+- Customer: customer_number (string), must_win (boolean), country (string)
+- Inventory: quantity (float), is_quarantine (boolean)
+
+Relationships:
+- (ScheduledReceipt)-[:ON_RESOURCE]->(Resource)
+- (ScheduledReceipt)-[:FOR_ITEM]->(Item)
+- (ScheduledReceipt)-[:FULFILLS]->(CustomerOrder)-[:FOR_CUSTOMER]->(Customer)
+- (Inventory)-[:FOR_ITEM]->(Item)
+
+ACTUAL LINE NAMES (use these exact strings):
+- 'TFS 80/2 (Linie 5 NEU)'
+- 'LINIE 9'
+- 'Linie 11 EDO-Konfektion. II'
+- 'Linie 6 EDO-Konfektion. I'
+- 'BOSCH 1 (Linie 1)'
+- 'ROMMELAG BOTTELPACK III'
+- 'ROMMELAG BOTTELPACK IV'
+- 'TFS 20 (Linie 4)'
+- 'AGGREGATIONSSTATION 1'
+
+THIS WEEK DATES (March 1-9, 2026):
+['1-Mar-26', '2-Mar-26', '3-Mar-26', '4-Mar-26', '5-Mar-26', '6-Mar-26', '7-Mar-26', '8-Mar-26', '9-Mar-26']
+
+EXAMPLE QUERIES:
+
+Question: "How many orders start on Line 5 this week?"
+Query:
+MATCH (sr:ScheduledReceipt)-[:ON_RESOURCE]->(r:Resource {{line_name: 'TFS 80/2 (Linie 5 NEU)'}})
+WHERE sr.start_date IN ['1-Mar-26', '2-Mar-26', '3-Mar-26', '4-Mar-26', '5-Mar-26', '6-Mar-26', '7-Mar-26', '8-Mar-26', '9-Mar-26']
+RETURN count(sr) AS orders_this_week
+
+Question: "Which lines make high-margin products?"
+Query:
+MATCH (sr:ScheduledReceipt)-[:ON_RESOURCE]->(r:Resource)
+MATCH (sr)-[:FOR_ITEM]->(i:Item {{item_type: 'FP'}})
+WHERE i.margin_pct > 0.40
+RETURN r.line_name AS line,
+       count(DISTINCT i.code) AS products,
+       sum(sr.quantity * i.margin) AS total_margin
+ORDER BY total_margin DESC
+LIMIT 10
+
+Question: "Show must-win customers"
+Query:
+MATCH (c:Customer {{must_win: true}})
+OPTIONAL MATCH (c)<-[:FOR_CUSTOMER]-(co:CustomerOrder)<-[:FULFILLS]-(sr:ScheduledReceipt)
+OPTIONAL MATCH (sr)-[:FOR_ITEM]->(i:Item {{item_type: 'FP'}})
+RETURN c.customer_number AS customer,
+       c.country AS country,
+       count(DISTINCT co) AS orders,
+       sum(sr.quantity * i.asp) AS revenue
+ORDER BY revenue DESC
+
+Question: "What products have available inventory?"
+Query:
+MATCH (inv:Inventory)-[:FOR_ITEM]->(i:Item {{item_type: 'FP'}})
+WHERE NOT inv.is_quarantine AND inv.quantity > 0
+RETURN i.code AS product,
+       i.description AS name,
+       sum(inv.quantity) AS available_qty
+ORDER BY available_qty DESC
+LIMIT 20
+
+NOW ANSWER THIS QUESTION: {question}
+
+RULES:
+- Return ONLY the Cypher query
+- Use exact line names from the list above
+- For dates, use IN clause with string list
+- Filter to item_type: 'FP' for finished goods
+- Add LIMIT 100 at the end
+- No markdown formatting, just the query
+
+Query:"""}]
                 )
                 
                 query = response.content[0].text.strip()
