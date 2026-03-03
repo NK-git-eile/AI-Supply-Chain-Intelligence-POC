@@ -118,60 +118,76 @@ if st.session_state.show_intro:
         
         with col1:
             st.markdown("""
-            **1️⃣ You Ask**
-            
-            💬 "Which customers depend on Line 5?"
-            
-            Natural language question
-            """)
+            <div style='background: #dbeafe; border-radius: 8px; padding: 1rem; height: 140px;'>
+                <strong>1️⃣ You Ask</strong><br><br>
+                💬 "Which customers depend on Line 5?"<br><br>
+                <em>Natural language question</em>
+            </div>
+            """, unsafe_allow_html=True)
         
         with col2:
             st.markdown("""
-            **2️⃣ AI Generates**
-            
-            🔄 Creates Neo4j query
-            
-            Cypher code generated
-            """)
+            <div style='background: #e0e7ff; border-radius: 8px; padding: 1rem; height: 140px;'>
+                <strong>2️⃣ AI Generates</strong><br><br>
+                🔄 Creates Neo4j query<br><br>
+                <em>Cypher code generated</em>
+            </div>
+            """, unsafe_allow_html=True)
         
         with col3:
             st.markdown("""
-            **3️⃣ Data Returns**
-            
-            📊 Work orders, customers, financials
-            
-            Real-time results
-            """)
+            <div style='background: #d1fae5; border-radius: 8px; padding: 1rem; height: 140px;'>
+                <strong>3️⃣ Data Returns</strong><br><br>
+                📊 Work orders, customers, financials<br><br>
+                <em>Real-time results</em>
+            </div>
+            """, unsafe_allow_html=True)
         
         with col4:
             st.markdown("""
-            **4️⃣ AI Interprets**
-            
-            💡 "15 orders affect 12 customers"
-            
-            Business insight
-            """)
+            <div style='background: #fef9c3; border-radius: 8px; padding: 1rem; height: 140px;'>
+                <strong>4️⃣ AI Interprets</strong><br><br>
+                💡 "15 orders affect 12 customers"<br><br>
+                <em>Business insight</em>
+            </div>
+            """, unsafe_allow_html=True)
         
         st.markdown("---")
         
         # Interactive example
         with st.expander("🔍 See an Example Query", expanded=True):
             st.markdown("""
-            **Example Question:**  
-            *"Which high-margin products are starting on Line 5 this week?"*
+            <div style='background: #dbeafe; border-left: 4px solid #3b82f6; padding: 0.5rem 1rem; border-radius: 4px; margin-bottom: 0.75rem;'>
+                <strong>Step 1 — You Ask:</strong><br>
+                <em>"Which high-margin products are starting on Line 5 this week?"</em>
+            </div>
+            """, unsafe_allow_html=True)
             
-            **AI Generates This Query:**
-```cypher
-            MATCH (sr:ScheduledReceipt)-[:ON_RESOURCE]->(r:Resource {line_name: 'TFS 80/2 (Linie 5 NEU)'})
-            MATCH (sr)-[:FOR_ITEM]->(i:Item)
-            WHERE sr.start_date IN ['2-Mar-26', '3-Mar-26', '4-Mar-26', '5-Mar-26', '6-Mar-26', '7-Mar-26', '8-Mar-26']
-              AND i.margin_pct > 0.40
-            RETURN sr.item, i.description, sr.quantity
-```
+            st.markdown("""
+            <div style='background: #e0e7ff; border-left: 4px solid #6366f1; padding: 0.5rem 1rem; border-radius: 4px; margin-bottom: 0.5rem;'>
+                <strong>Step 2 — AI Generates:</strong>
+            </div>
+            """, unsafe_allow_html=True)
             
-            **AI Interprets Result:**  
-            💡 *"8 unique high-margin products account for 9 work orders starting this week, generating $3.35M in total margin"*
-            """)
+            st.code("""MATCH (sr:ScheduledReceipt)-[:ON_RESOURCE]->(r:Resource {line_name: 'TFS 80/2 (Linie 5 NEU)'})
+MATCH (sr)-[:FOR_ITEM]->(i:Item)
+WHERE sr.start_date IN ['2-Mar-26', '3-Mar-26', '4-Mar-26', '5-Mar-26', '6-Mar-26', '7-Mar-26', '8-Mar-26']
+  AND i.margin_pct > 0.40
+RETURN sr.item, i.description, sr.quantity""", language="cypher")
+            
+            st.markdown("""
+            <div style='background: #d1fae5; border-left: 4px solid #10b981; padding: 0.5rem 1rem; border-radius: 4px; margin-bottom: 0.75rem;'>
+                <strong>Step 3 — Data Returns:</strong><br>
+                8 unique products across 9 work orders with quantities, descriptions, and margin data
+            </div>
+            """, unsafe_allow_html=True)
+            
+            st.markdown("""
+            <div style='background: #fef9c3; border-left: 4px solid #eab308; padding: 0.5rem 1rem; border-radius: 4px;'>
+                <strong>Step 4 — AI Interprets:</strong><br>
+                💡 <em>"8 unique high-margin products account for 9 work orders starting this week, generating $3.35M in total margin"</em>
+            </div>
+            """, unsafe_allow_html=True)
         
         col_btn1, col_btn2, col_btn3 = st.columns([1, 1, 1])
         with col_btn1:
