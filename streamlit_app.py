@@ -6,6 +6,29 @@ from datetime import datetime, timedelta
 
 st.set_page_config(page_title="Production Control Tower", page_icon="🔗", layout="wide")
 
+# Password Protection
+if 'authenticated' not in st.session_state:
+    st.session_state.authenticated = False
+
+if not st.session_state.authenticated:
+    st.markdown("""
+    <div style='background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%); padding: 2rem; border-radius: 10px; text-align: center; color: white; margin-bottom: 2rem;'>
+        <h1>🔗 Production Control Tower</h1>
+        <p>Berlin Manufacturing Site - Authorized Access Only</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        password = st.text_input("Enter Password:", type="password", key="password_input")
+        if st.button("Login", use_container_width=True):
+            if password == st.secrets.get("APP_PASSWORD", "bausch2026"):
+                st.session_state.authenticated = True
+                st.rerun()
+            else:
+                st.error("❌ Incorrect password")
+    st.stop()
+
 st.markdown("""
 <style>
     .main-header {
@@ -25,6 +48,9 @@ st.markdown("""
         margin: 0.25rem 0 0 0;
         opacity: 0.9;
     }
+    .suggested-prompt {
+        margin: 0.25rem;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -34,6 +60,11 @@ with st.sidebar:
     neo4j_user = "neo4j"
     neo4j_password = st.text_input("Neo4j Password", type="password", value=st.secrets.get("NEO4J_PASSWORD", ""))
     claude_key = st.text_input("Claude API Key", type="password", value=st.secrets.get("CLAUDE_API_KEY", ""))
+    
+    st.markdown("---")
+    if st.button("🚪 Logout"):
+        st.session_state.authenticated = False
+        st.rerun()
 
 current_time = datetime.now()
 st.markdown(f"""
@@ -101,7 +132,61 @@ col_left, col_right = st.columns(2)
 
 with col_left:
     st.subheader("💬 Ask Questions")
-    question = st.text_area("", height=100, placeholder="Which customer orders depend on Line 5 production this week?", label_visibility="collapsed")
+    
+    # Suggested prompts
+    st.markdown("**💡 Try these questions:**")
+    
+    suggested_prompts = [
+        "Which customer orders depend on Line 5 production this week?",
+        "Which high-margin products are starting on Line 5 this week?",
+        "If Line 5 goes down Thursday and Friday, what revenue is at risk?",
+        "Are any must-win customers affected by Line 5 this week?",
+        "Which other lines can make the products scheduled on Line 5 this week?",
+        "Show me the highest margin work order starting on Line 5 this week",
+        "Which production line has the most revenue this week?",
+        "How many work orders start on Line 5 this week?"
+    ]
+    
+    # Create 2 columns for buttons
+    col_p1, col_p2 = st.columns(2)
+    
+    for idx, prompt in enumerate(suggested_prompts):
+        # Alternate between columns
+        target_col = col_p1 if idx % 2 == 0 else col_p2
+        
+        with target_col:
+            # Create short label for button
+            if "customer orders depend" in prompt:
+                label = "👥 Customer Dependencies"
+            elif "high-margin products" in prompt:
+                label = "💎 High-Margin Products"
+            elif "Thursday and Friday" in prompt:
+                label = "⏰ Thu/Fri Downtime"
+            elif "must-win" in prompt:
+                label = "🎯 Must-Win Check"
+            elif "other lines" in prompt:
+                label = "🔧 Alternative Lines"
+            elif "highest margin" in prompt:
+                label = "📊 Top Margin Order"
+            elif "most revenue" in prompt:
+                label = "🏆 Highest Revenue Line"
+            elif "How many" in prompt:
+                label = "📋 Order Count"
+            else:
+                label = prompt[:30] + "..."
+            
+            if st.button(label, key=f"prompt_{idx}", use_container_width=True):
+                st.session_state.current_question = prompt
+    
+    # Question text area
+    question = st.text_area(
+        "", 
+        height=100, 
+        placeholder="Or type your own question...",
+        value=st.session_state.get('current_question', ''),
+        label_visibility="collapsed",
+        key="question_input"
+    )
     
     col_btn1, col_btn2 = st.columns([1, 1])
     with col_btn1:
@@ -155,78 +240,21 @@ ACTUAL RESOURCE LINE NAMES (physical lines - use exact strings):
 THIS WEEK DATES (March 2-8, 2026 - Calendar week Mon-Sun):
 ['2-Mar-26', '3-Mar-26', '4-Mar-26', '5-Mar-26', '6-Mar-26', '7-Mar-26', '8-Mar-26']
 
+DATE MAPPING (for relative date references):
+- Today = March 3, 2026 (Tuesday)
+- Monday = March 2, 2026 = '2-Mar-26'
+- Tuesday = March 3, 2026 = '3-Mar-26'
+- Wednesday = March 4, 2026 = '4-Mar-26'
+- Thursday = March 5, 2026 = '5-Mar-26'
+- Friday = March 6, 2026 = '6-Mar-26'
+- Saturday = March 7, 2026 = '7-Mar-26'
+- Sunday = March 8, 2026 = '8-Mar-26'
+
 WORK ORDER IDENTIFICATION:
 - Always return these fields to identify a work order: sr.item, sr.start_date, sr.quantity
 - Optionally include: sr.sched_date, sr.site, i.description, i.item_type
 - Do NOT expand to customer orders unless specifically asked
 - One ScheduledReceipt can fulfill multiple CustomerOrders - don't join unless needed
-
-EXAMPLE QUERIES:
-
-Question: "List work orders starting on Line 5 this week"
-Query:
-MATCH (sr:ScheduledReceipt)-[:ON_RESOURCE]->(r:Resource {{line_name: 'TFS 80/2 (Linie 5 NEU)'}})
-MATCH (sr)-[:FOR_ITEM]->(i:Item)
-WHERE sr.start_date IN ['2-Mar-26', '3-Mar-26', '4-Mar-26', '5-Mar-26', '6-Mar-26', '7-Mar-26', '8-Mar-26']
-RETURN sr.item AS item,
-       i.description AS product_name,
-       i.item_type AS type,
-       sr.start_date AS start_date,
-       sr.sched_date AS completion_date,
-       sr.quantity AS quantity
-ORDER BY sr.start_date
-LIMIT 100
-
-Question: "Which work orders have no available inventory?"
-Query:
-MATCH (sr:ScheduledReceipt)-[:FOR_ITEM]->(i:Item)
-WHERE i.item_type IN ['FP', 'SFP']
-OPTIONAL MATCH (inv:Inventory)-[:FOR_ITEM]->(i)
-WHERE NOT inv.is_quarantine
-WITH sr, i, sum(COALESCE(inv.quantity, 0)) AS available_inventory
-WHERE available_inventory = 0
-RETURN sr.item AS item,
-       i.description AS product_name,
-       i.item_type AS type,
-       sr.start_date AS start_date,
-       sr.quantity AS quantity,
-       available_inventory
-ORDER BY sr.start_date
-LIMIT 100
-
-Question: "Which lines make high-margin products?"
-Query:
-MATCH (sr:ScheduledReceipt)-[:ON_RESOURCE]->(r:Resource)
-MATCH (sr)-[:FOR_ITEM]->(i:Item)
-WHERE i.margin_pct > 0.40 AND i.item_type IN ['FP', 'SFP']
-RETURN r.line_name AS line,
-       count(DISTINCT i.code) AS products,
-       sum(sr.quantity * i.margin) AS total_margin
-ORDER BY total_margin DESC
-LIMIT 10
-
-Question: "Show must-win customers"
-Query:
-MATCH (c:Customer {{must_win: true}})
-OPTIONAL MATCH (c)<-[:FOR_CUSTOMER]-(co:CustomerOrder)<-[:FULFILLS]-(sr:ScheduledReceipt)
-OPTIONAL MATCH (sr)-[:FOR_ITEM]->(i:Item)
-WHERE i.item_type IN ['FP', 'SFP']
-RETURN c.customer_number AS customer,
-       c.country AS country,
-       count(DISTINCT co) AS orders,
-       sum(sr.quantity * i.asp) AS revenue
-ORDER BY revenue DESC
-
-Question: "What products have available inventory?"
-Query:
-MATCH (inv:Inventory)-[:FOR_ITEM]->(i:Item)
-WHERE NOT inv.is_quarantine AND inv.quantity > 0 AND i.item_type IN ['FP', 'SFP']
-RETURN i.code AS product,
-       i.description AS name,
-       i.item_type AS type,
-       sum(inv.quantity) AS available_qty
-ORDER BY available_qty DESC
-LIMIT 20
 
 NOW ANSWER THIS QUESTION: {question}
 
@@ -259,7 +287,6 @@ Query:"""}]
                     
                     # AI interpretation of results
                     with st.spinner("Interpreting results..."):
-                        # Prepare data sample for AI (limit to 20 rows to avoid token limits)
                         data_sample = pd.DataFrame(data).head(20).to_dict('records')
                         
                         interpret_response = client.messages.create(
@@ -277,18 +304,20 @@ Provide a brief, insightful summary answering the user's question. Focus on:
 - Important patterns or insights
 - Direct answer to what they asked
 
-Be concise (2-3 sentences maximum). Use natural business language.
+Be concise (2-3 sentences maximum). Use natural business language with proper spacing.
 
-Examples:
-- "All 15 products starting on Line 5 this week are high-margin (>40%), representing $4.4M in margin value"
-- "Line 9 has the highest revenue this week at $45.2M across 28 work orders"
-- "Customer orders span 12 countries, with Germany and Spain accounting for 65% of the volume"
-- "5 alternative lines can produce these products: LINIE 9, BOSCH 1, and Linie 6"
+CRITICAL: Ensure proper spacing around all numbers and dollar amounts.
+Good: "$2.74M in revenue" or "$2.74 M in revenue"
+Bad: "2.74Minrevenue" or "$2.74Minrevenue"
 
 Summary:"""}]
                         )
                         
                         summary = interpret_response.content[0].text.strip()
+                        # Fix spacing issues
+                        summary = summary.replace('$', ' $').replace('  ', ' ')
+                        summary = ' '.join(summary.split())
+                        
                         st.info(f"💡 **Insight:** {summary}")
                     
                 else:
@@ -481,4 +510,4 @@ with col_right:
                         for rec in recs:
                             st.markdown(rec)
 
-st.caption("Production Control Tower - Berlin Pilot | Real data + Mock financials")
+st.caption("Production Control Tower - Berlin Pilot | Real data + Mock financials | 🔒 Secure Access")
