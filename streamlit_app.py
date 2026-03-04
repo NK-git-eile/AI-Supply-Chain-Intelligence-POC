@@ -886,16 +886,19 @@ The generated Cypher query was:
 
 Provide a clear, direct answer to the user's question based on this empty result.
 
-Consider whether the query might have an issue (wrong line name, wrong date format, etc.)
-or if the answer genuinely is zero/none.
+CRITICAL RULES:
+- ONLY state what the query looked for and that it found nothing. Do NOT speculate about WHY.
+- Do NOT make claims about other data that might or might not exist (e.g., don't say "there are no scheduled receipts on Line 5" just because a filtered query returned empty — the filter may be the reason, not the absence of data).
+- Keep it to 1 sentence maximum.
+- State the null result precisely: "No [exactly what was queried] were found for [exactly the filters applied]."
 
-Be concise and helpful. Use natural language. Examples:
-- "No must-win customers are affected by Line 5 this week"
-- "All products starting this week have available inventory"
-- "No alternative lines found - products are line-specific"
-- "Line 5 has no work orders scheduled this week"
+Examples of GOOD answers:
+- "No must-win customer orders were found linked to Line 5 production this week."
+- "No alternative production lines were found for these items."
 
-Keep it to 1-2 sentences maximum. Be positive when appropriate.
+Examples of BAD answers (never do this):
+- "There are no scheduled receipts on Line 5 this week." (wrong — the query filtered on must-win, not all receipts)
+- "Either no customers are marked as must-win, or none have orders." (speculative)
 
 Answer:"""}]
                     )
