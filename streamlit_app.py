@@ -40,11 +40,6 @@ if st.session_state.show_intro:
     # Slide 1: Architecture Context
     if st.session_state.intro_page == 1:
         st.markdown("## 👋 Welcome to AI Operations Intelligence")
-        st.markdown("""
-        <div style='background: #f0f4ff; border-left: 4px solid #3b82f6; padding: 0.75rem 1rem; border-radius: 4px; margin-bottom: 0.75rem;'>
-            <span style='font-size: 1.1rem;'>This proof of concept demonstrates the <strong>Operations Tower</strong> — AI-enabled decision support that senses external events and assesses operational impact in real time, ensuring <strong>plans are realised through aligned execution</strong>.</span>
-        </div>
-        """, unsafe_allow_html=True)
         
         # Embedded architecture diagram
         import base64
@@ -52,23 +47,16 @@ if st.session_state.show_intro:
             with open("architecture.png", "rb") as img_file:
                 arch_b64 = base64.b64encode(img_file.read()).decode()
             st.markdown(f"""
-            <div style='text-align: center; margin: 0.5rem 0;'>
-                <img src='data:image/png;base64,{arch_b64}' style='max-width: 100%; border: 1px solid #e5e7eb; border-radius: 8px;'/>
-                <p style='color: #6b7280; font-size: 0.85rem; margin-top: 0.3rem;'>This PoC demonstrates the highlighted Operations Tower capability</p>
+            <div style='text-align: center; margin: 0.3rem 0;'>
+                <img src='data:image/png;base64,{arch_b64}' style='max-width: 85%; max-height: 400px; border: 1px solid #e5e7eb; border-radius: 8px;'/>
             </div>
             """, unsafe_allow_html=True)
         except FileNotFoundError:
             pass
         
-        st.markdown("""
-        <div style='background: #e0f2fe; border-left: 4px solid #0284c7; padding: 0.5rem 0.8rem; border-radius: 4px; margin-top: 0.5rem; margin-bottom: 0.5rem; text-align: center;'>
-            💬 <strong>We want your feedback!</strong> This is a proof of concept — use the <strong>Feedback</strong> section in the left sidebar to share your thoughts.
-        </div>
-        """, unsafe_allow_html=True)
-        
         col_btn1, col_btn2, col_btn3, col_btn4, col_btn5 = st.columns([1, 1, 1, 1, 1])
         with col_btn2:
-            if st.button("Next: What This Demonstrates →", use_container_width=True, type="primary"):
+            if st.button("Next →", use_container_width=True, type="primary"):
                 st.session_state.intro_page = 2
                 st.rerun()
         with col_btn4:
@@ -79,6 +67,12 @@ if st.session_state.show_intro:
     # Slide 2: What This PoC Demonstrates
     elif st.session_state.intro_page == 2:
         st.markdown("## 🤖 What This PoC Demonstrates")
+        
+        st.markdown("""
+        <div style='background: #f0f4ff; border-left: 4px solid #3b82f6; padding: 0.5rem 1rem; border-radius: 4px; margin-bottom: 0.5rem;'>
+            <span style='font-size: 1.05rem;'>This proof of concept demonstrates the <strong>Operations Tower</strong> — AI-enabled decision support that senses external events and assesses operational impact in real time, ensuring <strong>plans are realised through aligned execution</strong>.</span>
+        </div>
+        """, unsafe_allow_html=True)
         
         # Architecture mapping
         col1, col2 = st.columns(2)
@@ -193,74 +187,23 @@ RETURN sr.item, i.description, sr.quantity""", language="cypher")
             </div>
             """, unsafe_allow_html=True)
         
+        st.markdown("""
+        <div style='background: #e0f2fe; border-left: 4px solid #0284c7; padding: 0.4rem 0.8rem; border-radius: 4px; margin-top: 0.3rem; margin-bottom: 0.5rem; text-align: center;'>
+            💬 <strong>We want your feedback!</strong> This is a proof of concept — use the <strong>Feedback</strong> section in the left sidebar to share your thoughts.
+        </div>
+        """, unsafe_allow_html=True)
+        
         col_btn1, col_btn2, col_btn3 = st.columns([1, 1, 1])
         with col_btn1:
             if st.button("← Back", use_container_width=True):
                 st.session_state.intro_page = 1
                 st.rerun()
         with col_btn2:
-            if st.button("Next: Quick Start →", use_container_width=True, type="primary"):
-                st.session_state.intro_page = 3
-                st.rerun()
-        with col_btn3:
-            if st.button("Skip Intro", use_container_width=True):
-                st.session_state.show_intro = False
-                st.rerun()
-    
-    # Slide 3: Quick Start
-    elif st.session_state.intro_page == 3:
-        st.markdown("## 🚀 Quick Start Guide")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.markdown("""
-            ### 💬 AI Decision Support
-            
-            **Choose from 4 categories:**
-            - 📊 Financial Analysis
-            - 🌍 Middle East Crisis *(Sensing & Response)*
-            - ⏰ Scenario Planning
-            - 🔧 Operations
-            
-            Or type your own question!
-            """)
-        
-        with col2:
-            st.markdown("""
-            ### 🚨 Root Cause & Impact Analysis
-            
-            **Line Downtime Simulator:**
-            - Select a production line
-            - Click "Simulate 3-Day Downtime"
-            - See cascading financial & customer impact
-            - Get AI-prioritised recovery recommendations
-            """)
-        
-        st.markdown("---")
-        
-        st.markdown("""
-        <div style='background: #f0f4ff; border-left: 4px solid #6366f1; padding: 0.75rem 1rem; border-radius: 4px; margin-bottom: 0.75rem;'>
-            <span style='font-size: 1.1rem;'><strong>🔮 From PoC to Full Capability:</strong> This Operations Tower is one of four in the target architecture. The full vision includes a <strong>Supplier Tower</strong>, <strong>Customer Tower</strong>, and <strong>Distribution & Logistics Tower</strong> — all connected to planning through <strong>Agentic S&OP</strong>, with <strong>Appian process orchestration</strong> workflows to ensure plans are realised through aligned execution.</span>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        st.markdown("""
-        <div style='background: #d1fae5; border-radius: 6px; padding: 0.5rem 0.8rem;'>
-            ✅ <strong>You're Ready!</strong> Select a question category or use the simulator to explore line downtime scenarios. Share feedback via the sidebar.
-        </div>
-        <div style='margin-bottom: 1rem;'></div>
-        """, unsafe_allow_html=True)
-        
-        col_btn1, col_btn2 = st.columns([1, 2])
-        with col_btn1:
-            if st.button("← Back", use_container_width=True):
-                st.session_state.intro_page = 2
-                st.rerun()
-        with col_btn2:
             if st.button("🎯 Start Exploring", use_container_width=True, type="primary"):
                 st.session_state.show_intro = False
                 st.rerun()
+        with col_btn3:
+            pass
     
     st.stop()  # Don't show main app until intro complete
 
