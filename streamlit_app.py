@@ -708,7 +708,7 @@ Nodes:
 - ScheduledReceipt: item (string), site (string), start_date (string), sched_date (string), quantity (float), line (string - production method)
 - Resource: line_name (string - physical line), code (string), site (string)
 - Item: code (string), item_type (string: 'FP' or 'SFP'), asp (float), margin (float), margin_pct (float - DECIMAL format: 0.40 = 40%, 0.25 = 25%. NEVER use integer percentages like 40 or 25), description (string)
-- Customer: customer_number (string), must_win (boolean), country (string)
+- Customer: customer_number (string), must_win (boolean), country (string - UPPERCASE. ALL country values are stored in UPPERCASE e.g. 'GERMANY', 'UNITED ARAB EMIRATES', 'SAUDI ARABIA'. NEVER use mixed case like 'Germany' or 'Saudi Arabia'. Available countries: ALGERIA, ARGENTINA, AUSTRALIA, AUSTRIA, BAHRAIN, BELGIUM, BRAZIL, CANADA, CHINA, CYPRUS, CZECH REPUBLIC, DENMARK, EGYPT, FAROE ISLANDS, FINLAND, FRANCE VC, FRENCH GUIAN, GERMANY, GREECE, GUADELOUPE, IRAN (ISLAMIC REPL O, IRAQ, ISRAEL, ITALY, JORDAN, KUWAIT, LIBYAN ARAB, LUXEMBOURG, MALAYSIA, MARTINIQUE, MAURITIUS, MAYOTTE, MEXICO, MOROCCO, N. IRELAND, NETHERLANDS, NEW CALEDONI, NORWAY, POLAND, PORTUGAL, REPUBLIC OF KOREA, REUNION, SAUDI ARABIA, SINGAPORE, SOUTH AFRICA, SPAIN, SWEDEN, SWITZERLAND, TAIWAN, THAILAND, TUNISIA, TURKEY, UKRAINE, UNITED ARAB EMIRATES, UNITED KINGDOM, VIET NAM)
 - Inventory: quantity (float), is_quarantine (boolean)
 
 Relationships:
