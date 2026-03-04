@@ -711,11 +711,20 @@ Nodes:
 - Customer: customer_number (string), must_win (boolean), country (string - UPPERCASE. ALL country values are stored in UPPERCASE e.g. 'GERMANY', 'UNITED ARAB EMIRATES', 'SAUDI ARABIA'. NEVER use mixed case like 'Germany' or 'Saudi Arabia'. Available countries: ALGERIA, ARGENTINA, AUSTRALIA, AUSTRIA, BAHRAIN, BELGIUM, BRAZIL, CANADA, CHINA, CYPRUS, CZECH REPUBLIC, DENMARK, EGYPT, FAROE ISLANDS, FINLAND, FRANCE VC, FRENCH GUIAN, GERMANY, GREECE, GUADELOUPE, IRAN (ISLAMIC REPL O, IRAQ, ISRAEL, ITALY, JORDAN, KUWAIT, LIBYAN ARAB, LUXEMBOURG, MALAYSIA, MARTINIQUE, MAURITIUS, MAYOTTE, MEXICO, MOROCCO, N. IRELAND, NETHERLANDS, NEW CALEDONI, NORWAY, POLAND, PORTUGAL, REPUBLIC OF KOREA, REUNION, SAUDI ARABIA, SINGAPORE, SOUTH AFRICA, SPAIN, SWEDEN, SWITZERLAND, TAIWAN, THAILAND, TUNISIA, TURKEY, UKRAINE, UNITED ARAB EMIRATES, UNITED KINGDOM, VIET NAM)
 - Inventory: quantity (float), is_quarantine (boolean)
 
-Relationships:
+Relationships (CRITICAL - only these relationships exist, no others):
 - (ScheduledReceipt)-[:ON_RESOURCE]->(Resource)
-- (ScheduledReceipt)-[:FOR_ITEM]->(Item)
+- (ScheduledReceipt)-[:FOR_ITEM]->(Item)        ← ONLY ScheduledReceipt connects to Item, NOT Customer or CustomerOrder
 - (ScheduledReceipt)-[:FULFILLS]->(CustomerOrder)-[:FOR_CUSTOMER]->(Customer)
 - (Inventory)-[:FOR_ITEM]->(Item)
+
+COMMON QUERY PATTERNS (follow these exactly):
+- To get items with customer info:
+  MATCH (sr:ScheduledReceipt)-[:FOR_ITEM]->(i:Item)
+  MATCH (sr)-[:FULFILLS]->(co:CustomerOrder)-[:FOR_CUSTOMER]->(c:Customer)
+- To get items with line info:
+  MATCH (sr:ScheduledReceipt)-[:FOR_ITEM]->(i:Item)
+  MATCH (sr)-[:ON_RESOURCE]->(r:Resource)
+- NEVER write (Customer)-[:FOR_ITEM] or (CustomerOrder)-[:FOR_ITEM] — these relationships do NOT exist
 
 VALUE FORMAT RULES (CRITICAL - follow exactly):
 - margin_pct is a DECIMAL between 0 and 1. Example: 0.40 means 40%, 0.25 means 25%
