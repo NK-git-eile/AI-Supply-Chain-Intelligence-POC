@@ -978,21 +978,17 @@ with col_left:
         quantity_cols = [c for c in df_display.columns if any(k in c.lower() for k in ['quantity', 'units', 'volume'])]
         count_cols = [c for c in df_display.columns if any(k in c.lower() for k in ['orders', 'count', 'work_orders'])]
         
-        format_dict = {}
+        # Apply formatting safely - convert to numeric first, format as string
         for col in currency_cols:
             if col in df_display.columns:
-                format_dict[col] = '${:,.0f}'
-        for col in quantity_cols:
+                df_display[col] = pd.to_numeric(df_display[col], errors='coerce').apply(
+                    lambda x: f'${x:,.0f}' if pd.notna(x) else '')
+        for col in quantity_cols + count_cols:
             if col in df_display.columns:
-                format_dict[col] = '{:,.0f}'
-        for col in count_cols:
-            if col in df_display.columns:
-                format_dict[col] = '{:,.0f}'
+                df_display[col] = pd.to_numeric(df_display[col], errors='coerce').apply(
+                    lambda x: f'{x:,.0f}' if pd.notna(x) else '')
         
-        if format_dict:
-            st.dataframe(df_display.style.format(format_dict), use_container_width=True, height=300)
-        else:
-            st.dataframe(df_display, use_container_width=True, height=300)
+        st.dataframe(df_display, use_container_width=True, height=300)
 
 with col_right:
     st.subheader("🚨 Line Downtime Simulator")
