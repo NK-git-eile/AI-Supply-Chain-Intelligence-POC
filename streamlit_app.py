@@ -897,10 +897,10 @@ Summary:"""}]
                             )
                             
                             summary = interpret_response.content[0].text.strip()
-                            summary = summary.replace('`', '').replace('\u2018', '').replace('\u2019', '').replace('**', '').replace('# ', '')
-                            summary = summary.replace('$', ' $').replace('  ', ' ')
-                            summary = summary.lstrip('#').strip()
-                            summary = ' '.join(summary.split())
+                            import re
+                            summary = re.sub(r'[`\u2018\u2019\u201C\u201D*#]', '', summary)
+                            summary = re.sub(r'\s+\$', ' $', summary)
+                            summary = re.sub(r'\s+', ' ', summary).strip()
                             st.session_state.ai_result_insight = summary
                     except Exception:
                         st.session_state.ai_result_insight = f"Query returned {len(data)} results. AI summary temporarily unavailable."
