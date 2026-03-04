@@ -897,7 +897,7 @@ Summary:"""}]
                             )
                             
                             summary = interpret_response.content[0].text.strip()
-                            summary = summary.replace('`', '').replace('**', '').replace('# ', '')
+                            summary = summary.replace('`', '').replace('\u2018', '').replace('\u2019', '').replace('**', '').replace('# ', '')
                             summary = summary.replace('$', ' $').replace('  ', ' ')
                             summary = summary.lstrip('#').strip()
                             summary = ' '.join(summary.split())
