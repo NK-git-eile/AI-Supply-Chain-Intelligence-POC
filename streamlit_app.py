@@ -9,7 +9,7 @@ st.set_page_config(page_title="AI Operations Intelligence", page_icon="🔗", la
 # Reduce default top padding
 st.markdown("""
 <style>
-    .block-container { padding-top: 1rem; }
+    .block-container { padding-top: 1.5rem; }
 </style>
 """, unsafe_allow_html=True)
 
