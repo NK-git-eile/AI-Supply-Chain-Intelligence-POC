@@ -37,26 +37,40 @@ if 'intro_page' not in st.session_state:
 
 if st.session_state.show_intro:
     
-    # Slide 1: Data Overview
+    # Slide 1: Architecture Context
     if st.session_state.intro_page == 1:
         st.markdown("## 👋 Welcome to AI Operations Intelligence")
         st.markdown("""
         <div style='background: #f0f4ff; border-left: 4px solid #3b82f6; padding: 0.75rem 1rem; border-radius: 4px; margin-bottom: 0.75rem;'>
-            <span style='font-size: 1.1rem;'>A proof of concept demonstrating <strong>AI-enabled insights on live manufacturing data</strong>. This capability could evolve into a full Production Control Tower with KPIs, root cause analysis, and Appian workflow integration to ensure <strong>PLANS are realized through ALIGNED EXECUTION</strong>.</span>
+            <span style='font-size: 1.1rem;'>This proof of concept demonstrates the <strong>Operations Tower</strong> — AI-enabled decision support that senses external events and assesses operational impact in real time, ensuring <strong>plans are realised through aligned execution</strong>.</span>
         </div>
         """, unsafe_allow_html=True)
+        
+        # Embedded architecture diagram
+        import base64
+        try:
+            with open("architecture.png", "rb") as img_file:
+                arch_b64 = base64.b64encode(img_file.read()).decode()
+            st.markdown(f"""
+            <div style='text-align: center; margin: 0.5rem 0;'>
+                <img src='data:image/png;base64,{arch_b64}' style='max-width: 100%; border: 1px solid #e5e7eb; border-radius: 8px;'/>
+                <p style='color: #6b7280; font-size: 0.85rem; margin-top: 0.3rem;'>This PoC demonstrates the highlighted Operations Tower capability</p>
+            </div>
+            """, unsafe_allow_html=True)
+        except FileNotFoundError:
+            pass
         
         col1, col2 = st.columns([1, 1])
         
         with col1:
             st.markdown("""
-            ### 📊 Live Berlin Manufacturing Data
+            ### 📊 Foundations Layer
             **Data Source:** Blue Yonder Production Plan  
             **Plan Date:** February 28, 2026 (Last Friday)
             
             **Production Data:** Schedules, resources, methods & steps  
             **Master Data:** Items, customers, must-win flags  
-            **Inventory Data:** On-hand levels, quarantine status, available vs. reserved
+            **Inventory Data:** On-hand levels, quarantine status
             """)
         
         with col2:
@@ -87,56 +101,82 @@ if st.session_state.show_intro:
                 st.session_state.show_intro = False
                 st.rerun()
     
-    # Slide 2: How Queries Work
+    # Slide 2: How It Maps to the Architecture
     elif st.session_state.intro_page == 2:
-        st.markdown("## 🤖 How AI Queries Work")
+        st.markdown("## 🤖 What This PoC Demonstrates")
         
-        # Visual flow
-        col1, col2, col3, col4 = st.columns(4)
+        # Architecture mapping
+        col1, col2 = st.columns(2)
         
         with col1:
             st.markdown("""
-            <div style='background: #dbeafe; border-radius: 8px; padding: 0.6rem 0.8rem;'>
-                <strong>1️⃣ You Ask</strong><br>
-                💬 Natural language question
+            <div style='background: #dbeafe; border-radius: 8px; padding: 0.8rem; margin-bottom: 0.5rem;'>
+                <strong>🧠 AI Decision Support</strong><br>
+                Ask natural language questions about production, customers, and financials. AI translates to database queries and interprets results with business context.
+            </div>
+            """, unsafe_allow_html=True)
+            
+            st.markdown("""
+            <div style='background: #fef3c7; border-radius: 8px; padding: 0.8rem; margin-bottom: 0.5rem;'>
+                <strong>📡 Sensing &amp; Response</strong><br>
+                Simulate external disruptions like a Middle East crisis — instantly assess exposure across customers, orders, and production lines.
             </div>
             """, unsafe_allow_html=True)
         
         with col2:
             st.markdown("""
-            <div style='background: #e0e7ff; border-radius: 8px; padding: 0.6rem 0.8rem;'>
-                <strong>2️⃣ AI Generates</strong><br>
-                🔄 Cypher query created
-            </div>
-            """, unsafe_allow_html=True)
-        
-        with col3:
-            st.markdown("""
-            <div style='background: #d1fae5; border-radius: 8px; padding: 0.6rem 0.8rem;'>
-                <strong>3️⃣ Data Returns</strong><br>
-                📊 Real-time results
-            </div>
-            """, unsafe_allow_html=True)
-        
-        with col4:
-            st.markdown("""
-            <div style='background: #fef9c3; border-radius: 8px; padding: 0.6rem 0.8rem;'>
-                <strong>4️⃣ AI Interprets</strong><br>
-                💡 Business insight
-            </div>
-            """, unsafe_allow_html=True)
-        
-        # Interactive example - collapsed by default to save space
-        with st.expander("🔍 See an Example Query"):
-            st.markdown("""
-            <div style='background: #dbeafe; border-left: 4px solid #3b82f6; padding: 0.4rem 0.8rem; border-radius: 4px; margin-bottom: 0.5rem;'>
-                <strong>Step 1 — You Ask:</strong> <em>"Which high-margin products are starting on Line 5 this week?"</em>
+            <div style='background: #d1fae5; border-radius: 8px; padding: 0.8rem; margin-bottom: 0.5rem;'>
+                <strong>🔍 Root Cause Analysis</strong><br>
+                Line downtime simulator: select a line, simulate downtime, see cascading financial and customer impact with AI-prioritised recovery recommendations.
             </div>
             """, unsafe_allow_html=True)
             
             st.markdown("""
-            <div style='background: #e0e7ff; border-left: 4px solid #6366f1; padding: 0.4rem 0.8rem; border-radius: 4px; margin-bottom: 0.3rem;'>
-                <strong>Step 2 — AI Generates:</strong>
+            <div style='background: #e0e7ff; border-radius: 8px; padding: 0.8rem; margin-bottom: 0.5rem;'>
+                <strong>📊 Operational Visibility</strong><br>
+                Real-time KPIs from production data: work orders starting, must-win customer exposure, high-margin products, and active production lines.
+            </div>
+            """, unsafe_allow_html=True)
+        
+        # How queries work - collapsed
+        with st.expander("🔍 See How AI Queries Work"):
+            col_q1, col_q2, col_q3, col_q4 = st.columns(4)
+            
+            with col_q1:
+                st.markdown("""
+                <div style='background: #dbeafe; border-radius: 8px; padding: 0.6rem 0.8rem;'>
+                    <strong>1️⃣ You Ask</strong><br>
+                    💬 Natural language question
+                </div>
+                """, unsafe_allow_html=True)
+            
+            with col_q2:
+                st.markdown("""
+                <div style='background: #e0e7ff; border-radius: 8px; padding: 0.6rem 0.8rem;'>
+                    <strong>2️⃣ AI Generates</strong><br>
+                    🔄 Cypher query created
+                </div>
+                """, unsafe_allow_html=True)
+            
+            with col_q3:
+                st.markdown("""
+                <div style='background: #d1fae5; border-radius: 8px; padding: 0.6rem 0.8rem;'>
+                    <strong>3️⃣ Data Returns</strong><br>
+                    📊 Real-time results
+                </div>
+                """, unsafe_allow_html=True)
+            
+            with col_q4:
+                st.markdown("""
+                <div style='background: #fef9c3; border-radius: 8px; padding: 0.6rem 0.8rem;'>
+                    <strong>4️⃣ AI Interprets</strong><br>
+                    💡 Business insight
+                </div>
+                """, unsafe_allow_html=True)
+            
+            st.markdown("""
+            <div style='background: #dbeafe; border-left: 4px solid #3b82f6; padding: 0.4rem 0.8rem; border-radius: 4px; margin-bottom: 0.5rem;'>
+                <strong>Example:</strong> <em>"Which high-margin products are starting on Line 5 this week?"</em>
             </div>
             """, unsafe_allow_html=True)
             
@@ -146,11 +186,8 @@ WHERE sr.start_date IN ['2-Mar-26', '3-Mar-26', ...] AND i.margin_pct > 0.40
 RETURN sr.item, i.description, sr.quantity""", language="cypher")
             
             st.markdown("""
-            <div style='background: #d1fae5; border-left: 4px solid #10b981; padding: 0.4rem 0.8rem; border-radius: 4px; margin-bottom: 0.5rem;'>
-                <strong>Step 3 — Data Returns:</strong> 8 products across 9 work orders
-            </div>
             <div style='background: #fef9c3; border-left: 4px solid #eab308; padding: 0.4rem 0.8rem; border-radius: 4px;'>
-                <strong>Step 4 — AI Interprets:</strong> 💡 <em>"8 high-margin products, 9 work orders, $3.35M margin"</em>
+                <strong>💡 AI Insight:</strong> <em>"8 high-margin products across 9 work orders, $3.35M margin at risk"</em>
             </div>
             """, unsafe_allow_html=True)
         
@@ -176,11 +213,11 @@ RETURN sr.item, i.description, sr.quantity""", language="cypher")
         
         with col1:
             st.markdown("""
-            ### 💬 Ask Questions
+            ### 💬 AI Decision Support
             
             **Choose from 4 categories:**
             - 📊 Financial Analysis
-            - 🌍 Middle East Crisis
+            - 🌍 Middle East Crisis *(Sensing & Response)*
             - ⏰ Scenario Planning
             - 🔧 Operations
             
@@ -189,20 +226,20 @@ RETURN sr.item, i.description, sr.quantity""", language="cypher")
         
         with col2:
             st.markdown("""
-            ### 🚨 Line Downtime Simulator
+            ### 🚨 Root Cause & Impact Analysis
             
-            **Test scenarios:**
+            **Line Downtime Simulator:**
             - Select a production line
             - Click "Simulate 3-Day Downtime"
-            - See instant impact analysis
-            - Get prioritized recommendations
+            - See cascading financial & customer impact
+            - Get AI-prioritised recovery recommendations
             """)
         
         st.markdown("---")
         
         st.markdown("""
         <div style='background: #f0f4ff; border-left: 4px solid #6366f1; padding: 0.75rem 1rem; border-radius: 4px; margin-bottom: 0.75rem;'>
-            <span style='font-size: 1.1rem;'><strong>🔮 Future Vision:</strong> Evolve this PoC into a full <strong>AI-enabled Control Tower</strong> with live KPIs, root cause analysis, and Appian workflows to execute recommended actions — ensuring <strong>planning and execution are in synch</strong>.</span>
+            <span style='font-size: 1.1rem;'><strong>🔮 From PoC to Full Capability:</strong> This Operations Tower is one of four in the target architecture. The full vision includes a <strong>Supplier Tower</strong>, <strong>Customer Tower</strong>, and <strong>Distribution & Logistics Tower</strong> — all connected to planning through <strong>Agentic S&OP</strong>, with <strong>Appian process orchestration</strong> workflows to ensure plans are realised through aligned execution.</span>
         </div>
         """, unsafe_allow_html=True)
         
