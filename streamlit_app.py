@@ -421,7 +421,6 @@ with col_left:
         "🔧 Operations": [
             "Which other lines can make the products scheduled on Line 5 this week?",
             "How many work orders start on Line 5 this week?",
-            "Which production line has the most revenue this week?",
             "List all work orders starting on Line 5 this week"
         ]
     }
@@ -547,15 +546,6 @@ with col_left:
             WHERE sr.start_date IN ['2-Mar-26', '3-Mar-26', '4-Mar-26', '5-Mar-26', '6-Mar-26', '7-Mar-26', '8-Mar-26']
               AND i.item_type IN ['FP', 'SFP']
             RETURN count(sr) AS work_orders_count
-            LIMIT 100""",
-        
-        "Which production line has the most revenue this week?": """
-            MATCH (sr:ScheduledReceipt)-[:ON_RESOURCE]->(r:Resource)
-            MATCH (sr)-[:FOR_ITEM]->(i:Item)
-            WHERE sr.start_date IN ['2-Mar-26', '3-Mar-26', '4-Mar-26', '5-Mar-26', '6-Mar-26', '7-Mar-26', '8-Mar-26']
-              AND i.item_type IN ['FP', 'SFP']
-            RETURN r.line_name, count(sr) AS work_orders, sum(sr.quantity * i.asp) AS total_revenue
-            ORDER BY total_revenue DESC
             LIMIT 100""",
         
         "List all work orders starting on Line 5 this week": """
@@ -959,7 +949,12 @@ Answer:"""}]
 # ----- RENDER AI RESULTS BELOW ASK AI (full width under left column) -----
 with col_left:
     if st.session_state.get('ai_result_insight'):
-        st.info(f"💡 **Insight:** {st.session_state.ai_result_insight}")
+        insight_text = st.session_state.ai_result_insight
+        st.markdown(f"""
+        <div style='background: #e8f4f8; border-left: 4px solid #3b82f6; padding: 0.6rem 1rem; border-radius: 4px;'>
+            💡 <strong>Insight:</strong> {insight_text}
+        </div>
+        """, unsafe_allow_html=True)
     
     if st.session_state.get('ai_result_empty_msg'):
         st.success(f"✅ {st.session_state.ai_result_empty_msg}")
