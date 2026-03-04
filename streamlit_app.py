@@ -48,7 +48,7 @@ if st.session_state.show_intro:
                 arch_b64 = base64.b64encode(img_file.read()).decode()
             st.markdown(f"""
             <div style='text-align: center; margin: 0.3rem 0;'>
-                <img src='data:image/png;base64,{arch_b64}' style='max-width: 85%; max-height: 400px; border: 1px solid #e5e7eb; border-radius: 8px;'/>
+                <img src='data:image/png;base64,{arch_b64}' style='max-width: 100%; border: 1px solid #e5e7eb; border-radius: 8px;'/>
             </div>
             """, unsafe_allow_html=True)
         except FileNotFoundError:
