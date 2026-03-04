@@ -180,7 +180,7 @@ RETURN sr.item, i.description, sr.quantity""", language="cypher")
             
             **Choose from 4 categories:**
             - 📊 Financial Analysis
-            - 👥 Customer Impact
+            - 🌍 Middle East Crisis
             - ⏰ Scenario Planning
             - 🔧 Operations
             
@@ -425,10 +425,10 @@ with col_left:
             "Show me the highest margin work order starting on Line 5 this week",
             "What is the total revenue scheduled on Line 5 this week?"
         ],
-        "👥 Customer Impact": [
-            "Which customer orders depend on Line 5 production this week?",
-            "Are any must-win customers affected by Line 5 this week?",
-            "Show all must-win customer orders"
+        "🌍 Middle East Crisis": [
+            "What is the revenue exposure to customers in the Middle East in the coming 3 months?",
+            "Which Middle East customers have the largest order volumes?",
+            "What's the weekly production schedule for Middle East orders?"
         ],
         "⏰ Scenario Planning": [
             "If Line 5 goes down Thursday and Friday, what revenue is at risk?",
@@ -473,35 +473,38 @@ with col_left:
             RETURN sum(sr.quantity * i.asp) AS total_revenue, count(sr) AS work_orders, count(DISTINCT i) AS products
             LIMIT 100""",
         
-        "Which customer orders depend on Line 5 production this week?": """
-            MATCH (sr:ScheduledReceipt)-[:ON_RESOURCE]->(r:Resource {line_name: 'TFS 80/2 (Linie 5 NEU)'})
-            MATCH (sr)-[:FOR_ITEM]->(i:Item)
-            MATCH (sr)-[:FULFILLS]->(co)-[:FOR_CUSTOMER]->(c:Customer)
-            WHERE sr.start_date IN ['2-Mar-26', '3-Mar-26', '4-Mar-26', '5-Mar-26', '6-Mar-26', '7-Mar-26', '8-Mar-26']
+        "What is the revenue exposure to customers in the Middle East in the coming 3 months?": """
+            MATCH (sr:ScheduledReceipt)-[:FOR_ITEM]->(i:Item)
+            MATCH (sr)-[:FULFILLS]->(co:CustomerOrder)-[:FOR_CUSTOMER]->(c:Customer)
+            WHERE c.country IN ['SAUDI ARABIA', 'UNITED ARAB EMIRATES', 'BAHRAIN', 'KUWAIT', 'JORDAN', 'IRAQ', 'IRAN (ISLAMIC REPL O', 'ISRAEL', 'EGYPT']
               AND i.item_type IN ['FP', 'SFP']
-            RETURN c.customer_number, c.must_win, sr.item, i.description, sr.start_date, sr.quantity,
-                   round(sr.quantity * i.asp) AS revenue
-            ORDER BY c.must_win DESC, revenue DESC
+              AND (sr.start_date CONTAINS 'Mar-26' OR sr.start_date CONTAINS 'Apr-26' OR sr.start_date CONTAINS 'May-26')
+            RETURN c.country, c.customer_number, count(sr) AS orders,
+                   round(sum(sr.quantity * i.asp)) AS total_revenue,
+                   round(sum(sr.quantity * i.margin)) AS total_margin
+            ORDER BY total_revenue DESC
             LIMIT 100""",
         
-        "Are any must-win customers affected by Line 5 this week?": """
-            MATCH (sr:ScheduledReceipt)-[:ON_RESOURCE]->(r:Resource {line_name: 'TFS 80/2 (Linie 5 NEU)'})
-            MATCH (sr)-[:FOR_ITEM]->(i:Item)
-            MATCH (sr)-[:FULFILLS]->(co)-[:FOR_CUSTOMER]->(c:Customer {must_win: true})
-            WHERE sr.start_date IN ['2-Mar-26', '3-Mar-26', '4-Mar-26', '5-Mar-26', '6-Mar-26', '7-Mar-26', '8-Mar-26']
+        "Which Middle East customers have the largest order volumes?": """
+            MATCH (sr:ScheduledReceipt)-[:FOR_ITEM]->(i:Item)
+            MATCH (sr)-[:FULFILLS]->(co:CustomerOrder)-[:FOR_CUSTOMER]->(c:Customer)
+            WHERE c.country IN ['SAUDI ARABIA', 'UNITED ARAB EMIRATES', 'BAHRAIN', 'KUWAIT', 'JORDAN', 'IRAQ', 'IRAN (ISLAMIC REPL O', 'ISRAEL', 'EGYPT']
               AND i.item_type IN ['FP', 'SFP']
-            RETURN c.customer_number, sr.item, i.description, sr.start_date, sr.quantity,
-                   round(sr.quantity * i.asp) AS revenue, round(sr.quantity * i.margin) AS margin
-            ORDER BY revenue DESC
+            RETURN c.customer_number, c.country, c.must_win, count(sr) AS orders,
+                   round(sum(sr.quantity)) AS total_units,
+                   round(sum(sr.quantity * i.asp)) AS total_revenue
+            ORDER BY total_revenue DESC
             LIMIT 100""",
         
-        "Show all must-win customer orders": """
-            MATCH (sr:ScheduledReceipt)-[:FULFILLS]->(co)-[:FOR_CUSTOMER]->(c:Customer {must_win: true})
-            MATCH (sr)-[:FOR_ITEM]->(i:Item)
-            WHERE i.item_type IN ['FP', 'SFP']
-            RETURN c.customer_number, sr.item, i.description, sr.start_date, sr.quantity,
-                   round(sr.quantity * i.asp) AS revenue
-            ORDER BY revenue DESC
+        "What's the weekly production schedule for Middle East orders?": """
+            MATCH (sr:ScheduledReceipt)-[:FOR_ITEM]->(i:Item)
+            MATCH (sr)-[:FULFILLS]->(co:CustomerOrder)-[:FOR_CUSTOMER]->(c:Customer)
+            MATCH (sr)-[:ON_RESOURCE]->(r:Resource)
+            WHERE c.country IN ['SAUDI ARABIA', 'UNITED ARAB EMIRATES', 'BAHRAIN', 'KUWAIT', 'JORDAN', 'IRAQ', 'IRAN (ISLAMIC REPL O', 'ISRAEL', 'EGYPT']
+              AND i.item_type IN ['FP', 'SFP']
+            RETURN sr.start_date, r.line_name, sr.item, i.description, c.country, c.customer_number,
+                   sr.quantity, round(sr.quantity * i.asp) AS revenue
+            ORDER BY sr.start_date, r.line_name
             LIMIT 100""",
         
         "If Line 5 goes down Thursday and Friday, what revenue is at risk?": """
@@ -848,6 +851,25 @@ Query:"""}]
                 with driver.session() as session:
                     data = [dict(r) for r in session.run(query)]
                 
+                # If we hit the LIMIT, get the true total count
+                result_count_msg = f"{len(data)} results"
+                if len(data) == 100:
+                    try:
+                        # Wrap original query in a count to get true total
+                        count_query = f"MATCH (n) WITH n LIMIT 0 RETURN 0"  # fallback
+                        # Strip LIMIT and ORDER BY, wrap in count
+                        import re
+                        base_q = re.sub(r'ORDER BY.*?(?=LIMIT|$)', '', query, flags=re.IGNORECASE|re.DOTALL)
+                        base_q = re.sub(r'LIMIT\s+\d+', '', base_q, flags=re.IGNORECASE).strip()
+                        # Replace RETURN ... with RETURN count(*)
+                        base_q = re.sub(r'RETURN\s+.+', 'RETURN count(*) AS total', base_q, flags=re.IGNORECASE|re.DOTALL)
+                        with driver.session() as count_session:
+                            total = count_session.run(base_q).single()
+                            if total:
+                                result_count_msg = f"{total['total']} total results (showing first 100)"
+                    except:
+                        result_count_msg = "at least 100 results (limit applied)"
+                
                 if data:
                     st.session_state.ai_result_data = pd.DataFrame(data)
                     
@@ -858,7 +880,7 @@ Query:"""}]
                             max_tokens=250,
                             messages=[{"role": "user", "content": f"""The user asked: "{question}"
 
-The query returned {len(data)} results.
+The query returned {result_count_msg}.
 
 Sample of the data (first 20 rows):
 {pd.DataFrame(data).head(20).to_string()}
@@ -916,7 +938,19 @@ Answer:"""}]
                     st.session_state.ai_result_empty_msg = answer
                     
             except Exception as e:
-                st.error(f"Error: {e}")
+                error_str = str(e)
+                if '529' in error_str or 'overloaded' in error_str.lower():
+                    st.error("⏳ AI service is temporarily busy. Please wait a moment and try again.")
+                elif '401' in error_str or 'authentication' in error_str.lower():
+                    st.error("🔑 API key is invalid or expired. Please check your Claude API key.")
+                elif '429' in error_str or 'rate_limit' in error_str.lower():
+                    st.error("⏳ Rate limit reached. Please wait 30 seconds and try again.")
+                elif 'insufficient' in error_str.lower() or 'credit' in error_str.lower():
+                    st.error("💳 API credits exhausted. Please top up at console.anthropic.com.")
+                elif 'neo4j' in error_str.lower() or 'connection' in error_str.lower():
+                    st.error("🔌 Database connection failed. Please check Neo4j credentials.")
+                else:
+                    st.error(f"⚠️ Something went wrong. Please try again. ({type(e).__name__})")
 
 # ----- RENDER AI RESULTS BELOW ASK AI (full width under left column) -----
 with col_left:
