@@ -888,16 +888,18 @@ CRITICAL DOMAIN CONTEXT:
 Be concise (2-3 sentences maximum). Use natural business language with proper spacing.
 
 CRITICAL: Ensure proper spacing around all numbers and dollar amounts.
+- NEVER use backticks, markdown formatting, or code blocks in the summary.
+- NEVER use bold (**) or headers (#).
 Good: "$2.74M in revenue" or "$2.74 M in revenue"
-Bad: "2.74Minrevenue" or "$2.74Minrevenue"
+Bad: "`$2.74M`" or "**$2.74M**" or "`2.74Minrevenue`"
 
 Summary:"""}]
                             )
                             
                             summary = interpret_response.content[0].text.strip()
-                            summary = summary.replace('`', '').replace('**', '').replace('$', ' $').replace('  ', ' ')
-                            if summary.startswith('#'):
-                                summary = summary.split('\n', 1)[-1].strip()
+                            summary = summary.replace('`', '').replace('**', '').replace('# ', '')
+                            summary = summary.replace('$', ' $').replace('  ', ' ')
+                            summary = summary.lstrip('#').strip()
                             summary = ' '.join(summary.split())
                             st.session_state.ai_result_insight = summary
                     except Exception:
