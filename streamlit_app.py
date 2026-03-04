@@ -503,8 +503,9 @@ with col_left:
             WHERE c.country IN ['SAUDI ARABIA', 'UNITED ARAB EMIRATES', 'BAHRAIN', 'KUWAIT', 'JORDAN', 'IRAQ', 'IRAN (ISLAMIC REPL O', 'ISRAEL', 'EGYPT']
               AND i.item_type IN ['FP', 'SFP']
               AND (sr.start_date CONTAINS 'Mar-26' OR sr.start_date CONTAINS 'Apr-26')
-            RETURN r.line_name, sr.start_date, sr.item, i.description, c.country, c.customer_number,
-                   sr.quantity, round(sr.quantity * i.asp) AS revenue
+            WITH DISTINCT sr, i, r
+            RETURN r.line_name, sr.start_date, sr.item, i.description, sr.quantity,
+                   round(sr.quantity * i.asp) AS revenue
             ORDER BY r.line_name, sr.start_date
             LIMIT 100""",
         
@@ -891,6 +892,13 @@ Provide a brief, insightful summary answering the user's question. Focus on:
 - Key numbers and totals
 - Important patterns or insights
 - Direct answer to what they asked
+
+CRITICAL DOMAIN CONTEXT:
+- Each row in the data is a ScheduledReceipt (a production work order), NOT a customer order.
+- One work order can fulfil MULTIPLE customer orders, so if joined to customers, the same work order may appear multiple times (once per customer it serves).
+- When counting, count DISTINCT work orders (unique combinations of item + start_date + quantity), not total rows.
+- "production orders" and "work orders" = ScheduledReceipts. "customer orders" = CustomerOrders. Do NOT conflate them.
+- Do NOT use markdown headers (#) in the summary.
 
 Be concise (2-3 sentences maximum). Use natural business language with proper spacing.
 
