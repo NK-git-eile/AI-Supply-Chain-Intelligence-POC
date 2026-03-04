@@ -89,7 +89,7 @@ if st.session_state.show_intro:
             st.markdown("""
             <div style='background: #fef3c7; border-radius: 8px; padding: 0.8rem; margin-bottom: 0.5rem;'>
                 <strong>📡 Sensing &amp; Response</strong><br>
-                Simulate external disruptions like a Middle East crisis — instantly assess exposure across customers, orders, and production lines.
+                Simulate external disruptions like the Middle East crisis — instantly assess exposure across customers, orders, and production lines.
             </div>
             """, unsafe_allow_html=True)
         
@@ -433,9 +433,10 @@ with col_left:
             MATCH (sr)-[:FOR_ITEM]->(i:Item)
             WHERE sr.start_date IN ['2-Mar-26', '3-Mar-26', '4-Mar-26', '5-Mar-26', '6-Mar-26', '7-Mar-26', '8-Mar-26']
               AND i.item_type IN ['FP', 'SFP'] AND i.margin_pct > 0.40
-            RETURN sr.item, i.description, sr.start_date, sr.quantity, i.margin_pct, i.margin,
+            RETURN sr.item, i.description, sr.start_date, sr.quantity,
+                   round(i.margin_pct * 100) AS margin_percent,
                    round(sr.quantity * i.margin) AS total_margin
-            ORDER BY i.margin_pct DESC
+            ORDER BY total_margin DESC
             LIMIT 100""",
         
         "Show me the highest margin work order starting on Line 5 this week": """
@@ -443,9 +444,10 @@ with col_left:
             MATCH (sr)-[:FOR_ITEM]->(i:Item)
             WHERE sr.start_date IN ['2-Mar-26', '3-Mar-26', '4-Mar-26', '5-Mar-26', '6-Mar-26', '7-Mar-26', '8-Mar-26']
               AND i.item_type IN ['FP', 'SFP']
-            RETURN sr.item, i.description, sr.start_date, sr.quantity, i.margin_pct, i.margin,
+            RETURN sr.item, i.description, sr.start_date, sr.quantity,
+                   round(i.margin_pct * 100) AS margin_percent,
                    round(sr.quantity * i.margin) AS total_margin
-            ORDER BY sr.quantity * i.margin DESC
+            ORDER BY total_margin DESC
             LIMIT 1""",
         
         "What is the total revenue scheduled on Line 5 this week?": """
@@ -893,7 +895,9 @@ Summary:"""}]
                             )
                             
                             summary = interpret_response.content[0].text.strip()
-                            summary = summary.replace('$', ' $').replace('  ', ' ')
+                            summary = summary.replace('`', '').replace('**', '').replace('$', ' $').replace('  ', ' ')
+                            if summary.startswith('#'):
+                                summary = summary.split('\n', 1)[-1].strip()
                             summary = ' '.join(summary.split())
                             st.session_state.ai_result_insight = summary
                     except Exception:
