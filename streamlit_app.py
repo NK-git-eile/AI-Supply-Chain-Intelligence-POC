@@ -6,6 +6,13 @@ from datetime import datetime, timedelta
 
 st.set_page_config(page_title="AI Operations Intelligence", page_icon="🔗", layout="wide")
 
+# Reduce default top padding
+st.markdown("""
+<style>
+    .block-container { padding-top: 1rem; }
+</style>
+""", unsafe_allow_html=True)
+
 # Password Protection
 if 'authenticated' not in st.session_state:
     st.session_state.authenticated = False
@@ -39,7 +46,6 @@ if st.session_state.show_intro:
     
     # Slide 1: Architecture Context
     if st.session_state.intro_page == 1:
-        st.markdown("<div style='margin-top: -2rem;'></div>", unsafe_allow_html=True)
         st.markdown("## 👋 Welcome to AI Operations Intelligence")
         
         # Embedded architecture diagram
@@ -1138,3 +1144,4 @@ with col_right:
                             st.markdown(rec)
 
 st.caption("AI Operations Intelligence - Berlin PoC | Blue Yonder data (Feb 28, 2026) + Mock financials | 🔒 Secure Access")
+                                                                
