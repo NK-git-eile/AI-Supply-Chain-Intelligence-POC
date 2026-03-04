@@ -60,31 +60,6 @@ if st.session_state.show_intro:
         except FileNotFoundError:
             pass
         
-        col1, col2 = st.columns([1, 1])
-        
-        with col1:
-            st.markdown("""
-            ### 📊 Foundations Layer
-            **Data Source:** Blue Yonder Production Plan  
-            **Plan Date:** February 28, 2026 (Last Friday)
-            
-            **Production Data:** Schedules, resources, methods & steps  
-            **Master Data:** Items, customers, must-win flags  
-            **Inventory Data:** On-hand levels, quarantine status
-            """)
-        
-        with col2:
-            st.markdown("""
-            ### ⚠️ Important Notice
-            **Real Data:** ✅ Production schedules, inventory, customer orders, line assignments, production methods
-            
-            **Mock Data (Demo Only):** ⚠️ ASP, COGS, margin calculations
-            
-            📌 *"High margin" is defined as margin > 40% (`margin_pct > 0.40`)*
-            
-            *Financial figures are placeholder values for demonstration purposes.*
-            """)
-        
         st.markdown("""
         <div style='background: #e0f2fe; border-left: 4px solid #0284c7; padding: 0.5rem 0.8rem; border-radius: 4px; margin-top: 0.5rem; margin-bottom: 0.5rem; text-align: center;'>
             💬 <strong>We want your feedback!</strong> This is a proof of concept — use the <strong>Feedback</strong> section in the left sidebar to share your thoughts.
@@ -93,7 +68,7 @@ if st.session_state.show_intro:
         
         col_btn1, col_btn2, col_btn3, col_btn4, col_btn5 = st.columns([1, 1, 1, 1, 1])
         with col_btn2:
-            if st.button("Next: How It Works →", use_container_width=True, type="primary"):
+            if st.button("Next: What This Demonstrates →", use_container_width=True, type="primary"):
                 st.session_state.intro_page = 2
                 st.rerun()
         with col_btn4:
@@ -101,7 +76,7 @@ if st.session_state.show_intro:
                 st.session_state.show_intro = False
                 st.rerun()
     
-    # Slide 2: How It Maps to the Architecture
+    # Slide 2: What This PoC Demonstrates
     elif st.session_state.intro_page == 2:
         st.markdown("## 🤖 What This PoC Demonstrates")
         
@@ -137,6 +112,33 @@ if st.session_state.show_intro:
                 Real-time KPIs from production data: work orders starting, must-win customer exposure, high-margin products, and active production lines.
             </div>
             """, unsafe_allow_html=True)
+        
+        # Data details
+        st.markdown("---")
+        col_d1, col_d2 = st.columns([1, 1])
+        
+        with col_d1:
+            st.markdown("""
+            ### 📊 Foundations Layer
+            **Data Source:** Blue Yonder Production Plan  
+            **Plan Date:** February 28, 2026 (Last Friday)
+            
+            **Production Data:** Schedules, resources, methods & steps  
+            **Master Data:** Items, customers, must-win flags  
+            **Inventory Data:** On-hand levels, quarantine status
+            """)
+        
+        with col_d2:
+            st.markdown("""
+            ### ⚠️ Important Notice
+            **Real Data:** ✅ Production schedules, inventory, customer orders, line assignments, production methods
+            
+            **Mock Data (Demo Only):** ⚠️ ASP, COGS, margin calculations
+            
+            📌 *"High margin" is defined as margin > 40% (`margin_pct > 0.40`)*
+            
+            *Financial figures are placeholder values for demonstration purposes.*
+            """)
         
         # How queries work - collapsed
         with st.expander("🔍 See How AI Queries Work"):
