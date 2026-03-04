@@ -46,7 +46,7 @@ if st.session_state.show_intro:
     
     # Slide 1: Architecture Context
     if st.session_state.intro_page == 1:
-        st.markdown("## 👋 Welcome to AI Operations Intelligence")
+        st.markdown("<h3 style='margin-bottom: 0.2rem;'>👋 Welcome to AI Operations Intelligence</h3>", unsafe_allow_html=True)
         
         # Embedded architecture diagram
         import base64
@@ -54,7 +54,7 @@ if st.session_state.show_intro:
             with open("architecture.png", "rb") as img_file:
                 arch_b64 = base64.b64encode(img_file.read()).decode()
             st.markdown(f"""
-            <div style='text-align: center; margin: 0.3rem 0;'>
+            <div style='text-align: center; margin: 0;'>
                 <img src='data:image/png;base64,{arch_b64}' style='max-width: 100%; border: 1px solid #e5e7eb; border-radius: 8px;'/>
             </div>
             """, unsafe_allow_html=True)
@@ -74,12 +74,6 @@ if st.session_state.show_intro:
     # Slide 2: What This PoC Demonstrates
     elif st.session_state.intro_page == 2:
         st.markdown("## 🤖 What This PoC Demonstrates")
-        
-        st.markdown("""
-        <div style='background: #f0f4ff; border-left: 4px solid #3b82f6; padding: 0.5rem 1rem; border-radius: 4px; margin-bottom: 0.5rem;'>
-            <span style='font-size: 1.05rem;'>This proof of concept demonstrates the <strong>Operations Tower</strong> — AI-enabled decision support that senses external events and assesses operational impact in real time, ensuring <strong>plans are realised through aligned execution</strong>.</span>
-        </div>
-        """, unsafe_allow_html=True)
         
         # Architecture mapping
         col1, col2 = st.columns(2)
@@ -1144,4 +1138,3 @@ with col_right:
                             st.markdown(rec)
 
 st.caption("AI Operations Intelligence - Berlin PoC | Blue Yonder data (Feb 28, 2026) + Mock financials | 🔒 Secure Access")
-                                                                
