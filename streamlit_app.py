@@ -39,6 +39,7 @@ if st.session_state.show_intro:
     
     # Slide 1: Architecture Context
     if st.session_state.intro_page == 1:
+        st.markdown("<div style='margin-top: -2rem;'></div>", unsafe_allow_html=True)
         st.markdown("## 👋 Welcome to AI Operations Intelligence")
         
         # Embedded architecture diagram
