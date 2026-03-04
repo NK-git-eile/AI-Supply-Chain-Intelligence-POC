@@ -428,7 +428,7 @@ with col_left:
         "🌍 Middle East Crisis": [
             "What is the revenue exposure to customers in the Middle East in the coming 3 months?",
             "Which Middle East customers have the largest order volumes?",
-            "What's the weekly production schedule for Middle East orders?"
+            "Which production orders are due to start for Middle East customers in the next 4 weeks, by line?"
         ],
         "⏰ Scenario Planning": [
             "If Line 5 goes down Thursday and Friday, what revenue is at risk?",
@@ -496,15 +496,16 @@ with col_left:
             ORDER BY total_revenue DESC
             LIMIT 100""",
         
-        "What's the weekly production schedule for Middle East orders?": """
+        "Which production orders are due to start for Middle East customers in the next 4 weeks, by line?": """
             MATCH (sr:ScheduledReceipt)-[:FOR_ITEM]->(i:Item)
             MATCH (sr)-[:FULFILLS]->(co:CustomerOrder)-[:FOR_CUSTOMER]->(c:Customer)
             MATCH (sr)-[:ON_RESOURCE]->(r:Resource)
             WHERE c.country IN ['SAUDI ARABIA', 'UNITED ARAB EMIRATES', 'BAHRAIN', 'KUWAIT', 'JORDAN', 'IRAQ', 'IRAN (ISLAMIC REPL O', 'ISRAEL', 'EGYPT']
               AND i.item_type IN ['FP', 'SFP']
-            RETURN sr.start_date, r.line_name, sr.item, i.description, c.country, c.customer_number,
+              AND (sr.start_date CONTAINS 'Mar-26' OR sr.start_date CONTAINS 'Apr-26')
+            RETURN r.line_name, sr.start_date, sr.item, i.description, c.country, c.customer_number,
                    sr.quantity, round(sr.quantity * i.asp) AS revenue
-            ORDER BY sr.start_date, r.line_name
+            ORDER BY r.line_name, sr.start_date
             LIMIT 100""",
         
         "If Line 5 goes down Thursday and Friday, what revenue is at risk?": """
@@ -874,11 +875,12 @@ Query:"""}]
                     st.session_state.ai_result_data = pd.DataFrame(data)
                     
                     # AI interpretation of results (Haiku for speed)
-                    with st.spinner("Interpreting results..."):
-                        interpret_response = client.messages.create(
-                            model="claude-haiku-4-5-20251001",
-                            max_tokens=250,
-                            messages=[{"role": "user", "content": f"""The user asked: "{question}"
+                    try:
+                        with st.spinner("Interpreting results..."):
+                            interpret_response = client.messages.create(
+                                model="claude-haiku-4-5-20251001",
+                                max_tokens=250,
+                                messages=[{"role": "user", "content": f"""The user asked: "{question}"
 
 The query returned {result_count_msg}.
 
@@ -897,18 +899,21 @@ Good: "$2.74M in revenue" or "$2.74 M in revenue"
 Bad: "2.74Minrevenue" or "$2.74Minrevenue"
 
 Summary:"""}]
-                        )
-                        
-                        summary = interpret_response.content[0].text.strip()
-                        summary = summary.replace('$', ' $').replace('  ', ' ')
-                        summary = ' '.join(summary.split())
-                        st.session_state.ai_result_insight = summary
+                            )
+                            
+                            summary = interpret_response.content[0].text.strip()
+                            summary = summary.replace('$', ' $').replace('  ', ' ')
+                            summary = ' '.join(summary.split())
+                            st.session_state.ai_result_insight = summary
+                    except Exception:
+                        st.session_state.ai_result_insight = f"Query returned {len(data)} results. AI summary temporarily unavailable."
                     
                 else:
-                    interpret_response = client.messages.create(
-                        model="claude-haiku-4-5-20251001",
-                        max_tokens=150,
-                        messages=[{"role": "user", "content": f"""The user asked: "{question}"
+                    try:
+                        interpret_response = client.messages.create(
+                            model="claude-haiku-4-5-20251001",
+                            max_tokens=150,
+                            messages=[{"role": "user", "content": f"""The user asked: "{question}"
 
 The database query returned no results (0 rows).
 
@@ -932,10 +937,12 @@ Examples of BAD answers (never do this):
 - "Either no customers are marked as must-win, or none have orders." (speculative)
 
 Answer:"""}]
-                    )
-                    
-                    answer = interpret_response.content[0].text.strip()
-                    st.session_state.ai_result_empty_msg = answer
+                        )
+                        
+                        answer = interpret_response.content[0].text.strip()
+                        st.session_state.ai_result_empty_msg = answer
+                    except Exception:
+                        st.session_state.ai_result_empty_msg = "Query returned no results."
                     
             except Exception as e:
                 error_str = str(e)
@@ -964,7 +971,28 @@ with col_left:
         st.code(st.session_state.ai_result_query, language="cypher")
     
     if st.session_state.get('ai_result_data') is not None:
-        st.dataframe(st.session_state.ai_result_data, use_container_width=True, height=300)
+        df_display = st.session_state.ai_result_data.copy()
+        
+        # Format currency and large number columns
+        currency_cols = [c for c in df_display.columns if any(k in c.lower() for k in ['revenue', 'margin', 'value', 'cost'])]
+        quantity_cols = [c for c in df_display.columns if any(k in c.lower() for k in ['quantity', 'units', 'volume'])]
+        count_cols = [c for c in df_display.columns if any(k in c.lower() for k in ['orders', 'count', 'work_orders'])]
+        
+        format_dict = {}
+        for col in currency_cols:
+            if col in df_display.columns:
+                format_dict[col] = '${:,.0f}'
+        for col in quantity_cols:
+            if col in df_display.columns:
+                format_dict[col] = '{:,.0f}'
+        for col in count_cols:
+            if col in df_display.columns:
+                format_dict[col] = '{:,.0f}'
+        
+        if format_dict:
+            st.dataframe(df_display.style.format(format_dict), use_container_width=True, height=300)
+        else:
+            st.dataframe(df_display, use_container_width=True, height=300)
 
 with col_right:
     st.subheader("🚨 Line Downtime Simulator")
