@@ -333,9 +333,9 @@ def get_kpis(_driver, week):
         
         high_margin = session.run("""
             MATCH (sr:ScheduledReceipt)-[:FOR_ITEM]->(i:Item)
-            WHERE i.margin_pct > 0.40 AND i.item_type IN ['FP', 'SFP']
+            WHERE sr.start_date IN $week AND i.margin_pct > 0.40 AND i.item_type IN ['FP', 'SFP']
             RETURN sum(sr.quantity * i.margin) AS margin
-        """).single()
+        """, week=week).single()
         
         active_lines = session.run("""
             MATCH (sr:ScheduledReceipt)-[:ON_RESOURCE]->(r:Resource)
